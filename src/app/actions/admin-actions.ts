@@ -406,7 +406,7 @@ export async function bulkImportTopicsCsvAction(courseId: string, csvContent: st
           `INSERT INTO subjects (course_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id;`,
           [courseId, subName, maxSort]
         );
-        subId = newSubRes.rows[0].id;
+        subId = newSubRes.rows[0].id as string;
         subjectMap.set(subName.toLowerCase(), subId);
       }
 

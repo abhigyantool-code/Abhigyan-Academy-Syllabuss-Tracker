@@ -26,6 +26,14 @@ interface AdminPanelClientProps {
   initialData: any;
 }
 
+interface AdminNavTab {
+  id: 'curriculum' | 'courses' | 'faculty' | 'students' | 'codes' | 'review' | 'audit';
+  label: string;
+  icon: any;
+  count?: number;
+  badge?: number;
+}
+
 export function AdminPanelClient({ initialData }: AdminPanelClientProps) {
   const [activeTab, setActiveTab] = useState<
     'curriculum' | 'courses' | 'faculty' | 'students' | 'codes' | 'review' | 'audit'
@@ -43,7 +51,7 @@ export function AdminPanelClient({ initialData }: AdminPanelClientProps) {
     auditLog,
   } = initialData;
 
-  const navTabs = [
+  const navTabs: AdminNavTab[] = [
     { id: 'curriculum', label: 'Curriculum Builder', icon: BookOpen },
     { id: 'courses', label: 'Courses & Settings', icon: Layers, count: courses.length },
     { id: 'faculty', label: 'Faculty & Allocations', icon: GraduationCap, count: teachers.length },
@@ -51,7 +59,7 @@ export function AdminPanelClient({ initialData }: AdminPanelClientProps) {
     { id: 'codes', label: 'Class Codes & Board', icon: KeyRound, count: classCodes.filter((c: any) => c.is_active_now).length },
     { id: 'review', label: 'Review Queue', icon: ShieldAlert, badge: reviewQueue.length > 0 ? reviewQueue.length : undefined },
     { id: 'audit', label: 'Audit Trail', icon: History },
-  ] as const;
+  ];
 
   return (
     <div className="space-y-6">

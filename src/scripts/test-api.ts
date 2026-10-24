@@ -23,6 +23,12 @@ async function testSubmitAPI() {
     classCode,
   });
 
+  // Clean prior test record if any to ensure test idempotency
+  await query(
+    'DELETE FROM entries WHERE student_id = $1 AND topic_id = $2 AND class_date = $3',
+    [student.id, topic.id, today]
+  );
+
   // Test 1: Invalid Class Code
   const res1 = await fetch('http://localhost:3000/api/submit', {
     method: 'POST',

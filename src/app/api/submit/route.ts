@@ -11,7 +11,10 @@ export async function POST(request: NextRequest) {
     // 1. Zod Validation
     const parseResult = submitEntrySchema.safeParse(body);
     if (!parseResult.success) {
-      const firstError = parseResult.error.errors[0]?.message || 'Invalid submission form data.';
+      const firstError =
+        parseResult.error.issues?.[0]?.message ||
+        (parseResult.error as any).errors?.[0]?.message ||
+        'Invalid submission form data.';
       return NextResponse.json({ error: firstError }, { status: 400 });
     }
 
