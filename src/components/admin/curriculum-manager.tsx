@@ -20,6 +20,7 @@ import {
   ArrowUp,
   ArrowDown,
   Upload,
+  Download,
   Copy,
   FolderPlus,
   BookOpen,
@@ -583,10 +584,19 @@ export function CurriculumManager({ courses, subjects, topics }: CurriculumManag
                 &times;
               </button>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Format: <code className="bg-slate-950 px-1 py-0.5 rounded text-slate-300">Subject,Topic Name,Target Date,Notes</code>.
-              Existing subjects will be matched; new subjects will be created automatically.
-            </p>
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <p className="leading-relaxed">
+                Format: <code className="bg-slate-950 px-1 py-0.5 rounded text-slate-300">Subject,Topic Name,Target Date,Notes</code>
+              </p>
+              <a
+                href="/templates/syllabus_curriculum_template.csv"
+                download="syllabus_curriculum_template.csv"
+                className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 underline font-medium shrink-0"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Template (.csv)
+              </a>
+            </div>
             <textarea
               rows={8}
               value={csvText}

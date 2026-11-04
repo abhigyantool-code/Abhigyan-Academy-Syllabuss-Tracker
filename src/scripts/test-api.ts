@@ -1,6 +1,8 @@
 import { query } from '../lib/db';
 import { getTodayIST } from '../lib/date-utils';
 
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3005';
+
 async function testSubmitAPI() {
   console.log('--- Starting /api/submit Automated Test Suite ---');
   const today = getTodayIST();
@@ -30,7 +32,7 @@ async function testSubmitAPI() {
   );
 
   // Test 1: Invalid Class Code
-  const res1 = await fetch('http://localhost:3000/api/submit', {
+  const res1 = await fetch(`${BASE_URL}/api/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -49,7 +51,7 @@ async function testSubmitAPI() {
   if (res1.status !== 400) throw new Error('Expected 400 for wrong code');
 
   // Test 2: Valid Submission
-  const res2 = await fetch('http://localhost:3000/api/submit', {
+  const res2 = await fetch(`${BASE_URL}/api/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -69,7 +71,7 @@ async function testSubmitAPI() {
   if (res2.status !== 200) throw new Error('Expected 200 for valid submission');
 
   // Test 3: Duplicate Submission Rejection
-  const res3 = await fetch('http://localhost:3000/api/submit', {
+  const res3 = await fetch(`${BASE_URL}/api/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -88,7 +90,7 @@ async function testSubmitAPI() {
   if (res3.status !== 409) throw new Error('Expected 409 for duplicate submission');
 
   // Test 4: Honeypot Protection
-  const res4 = await fetch('http://localhost:3000/api/submit', {
+  const res4 = await fetch(`${BASE_URL}/api/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

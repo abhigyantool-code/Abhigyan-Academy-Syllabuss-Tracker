@@ -6,7 +6,7 @@ import {
   updateStudentAction,
   bulkImportStudentsCsvAction,
 } from '@/app/actions/admin-actions';
-import { Plus, Edit2, Upload, Users, GraduationCap, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit2, Upload, Download, Users, GraduationCap, CheckCircle, XCircle } from 'lucide-react';
 
 interface StudentItem {
   id: string;
@@ -349,9 +349,19 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
               <Upload className="w-4 h-4 text-sky-400" />
               Bulk Import Students via CSV
             </h3>
-            <p className="text-xs text-slate-400">
-              Format: <code className="bg-slate-950 px-1 py-0.5 rounded text-slate-300">Roll No,Name,Course Code</code>
-            </p>
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <p>
+                Format: <code className="bg-slate-950 px-1 py-0.5 rounded text-slate-300">Roll No,Name,Course Code</code>
+              </p>
+              <a
+                href="/templates/students_roster_template.csv"
+                download="students_roster_template.csv"
+                className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 underline font-medium shrink-0"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Template (.csv)
+              </a>
+            </div>
             <textarea
               rows={6}
               value={csvText}

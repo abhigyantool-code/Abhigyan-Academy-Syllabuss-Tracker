@@ -112,13 +112,28 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
     return students.filter((s) => s.course_id === selectedCourseId);
   }, [students, selectedCourseId]);
 
-  // Filtered students for searchable combobox
+  // Helper to extract clean serial number display (e.g. "NDA-01" -> "#1")
+  const getSerialDisplay = (rollNo: string) => {
+    const match = rollNo.match(/-(\d+)$/);
+    return match ? `#${parseInt(match[1], 10)}` : rollNo;
+  };
+
+  // Filtered students for searchable combobox (search by Serial No or Name)
   const filteredStudents = useMemo(() => {
-    if (!studentSearch.trim()) return enrolledStudents;
-    const q = studentSearch.toLowerCase();
-    return enrolledStudents.filter(
-      (s) => s.roll_no.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
-    );
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return enrolledStudents;
+    return enrolledStudents.filter((s) => {
+      const match = s.roll_no.match(/-(\d+)$/);
+      const serialNum = match ? parseInt(match[1], 10).toString() : '';
+      const rollLower = s.roll_no.toLowerCase();
+      const nameLower = s.name.toLowerCase();
+      return (
+        nameLower.includes(q) ||
+        rollLower.includes(q) ||
+        serialNum === q ||
+        (match && match[1].startsWith(q))
+      );
+    });
   }, [enrolledStudents, studentSearch]);
 
   const selectedStudentObj = useMemo(() => {
@@ -431,16 +446,16 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             </div>
           </div>
 
-          {/* 4. Searchable Student Dropdown (no free text) */}
+          {/* 4. Searchable Student Dropdown by Serial Number or Name */}
           <div className="space-y-1.5 relative">
             <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
                   4
                 </span>
-                Your Student ID / Roll No
+                Student (Serial Number / Name)
               </span>
-              <span className="text-[11px] font-normal text-zinc-500">Enrolled students only</span>
+              <span className="text-[11px] font-normal text-zinc-500">Enrolled batch students</span>
             </label>
 
             {/* Selected Student Display or Search input */}
@@ -448,8 +463,11 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
               <div className="flex items-center justify-between bg-zinc-950 border border-indigo-500/50 rounded-xl px-3.5 py-2 text-xs">
                 <div>
                   <span className="font-bold text-white block">{selectedStudentObj.name}</span>
-                  <span className="font-mono text-[11px] text-indigo-400 font-semibold">
-                    {selectedStudentObj.roll_no}
+                  <span className="font-mono text-[11px] text-indigo-400 font-semibold flex items-center gap-1.5 mt-0.5">
+                    <span className="bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded text-[10px]">
+                      S.No {getSerialDisplay(selectedStudentObj.roll_no)}
+                    </span>
+                    <span className="text-zinc-500">({selectedStudentObj.roll_no})</span>
                   </span>
                 </div>
                 <button
@@ -469,7 +487,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
                 <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Type roll number (e.g. ABG-001) or name..."
+                  placeholder="Type serial number (e.g. 1, 2, 15) or student name..."
                   value={studentSearch}
                   onFocus={() => setIsStudentDropdownOpen(true)}
                   onChange={(e) => {
@@ -498,8 +516,13 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
                           }}
                           className="w-full text-left p-2.5 rounded-xl hover:bg-zinc-900 transition-colors flex items-center justify-between text-xs"
                         >
-                          <span className="font-semibold text-zinc-200">{stu.name}</span>
-                          <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">
+                          <div className="flex items-center gap-2">
+                            <span className="w-8 h-6 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-mono text-[11px] font-bold flex items-center justify-center">
+                              {getSerialDisplay(stu.roll_no)}
+                            </span>
+                            <span className="font-semibold text-zinc-200">{stu.name}</span>
+                          </div>
+                          <span className="font-mono text-[11px] text-zinc-500">
                             {stu.roll_no}
                           </span>
                         </button>
@@ -539,11 +562,11 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             </div>
           )}
 
-          {/* 6. Status Selector */}
+          {/* Status Selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
               <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
-                6
+                {currentCourse?.require_class_code ? '6' : '5'}
               </span>
               Class Status
             </label>
