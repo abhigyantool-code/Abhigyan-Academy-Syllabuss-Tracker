@@ -16,7 +16,7 @@ export interface SessionPayload {
 }
 
 // Signs and encodes payload
-function signPayload(payload: SessionPayload): string {
+export function signPayload(payload: SessionPayload): string {
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = crypto
     .createHmac('sha256', SESSION_SECRET)
@@ -26,7 +26,7 @@ function signPayload(payload: SessionPayload): string {
 }
 
 // Verifies and decodes token
-function verifyPayload(token: string): SessionPayload | null {
+export function verifyPayload(token: string): SessionPayload | null {
   try {
     const [data, signature] = token.split('.');
     if (!data || !signature) return null;
