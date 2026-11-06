@@ -12,19 +12,18 @@ export interface VerifyStudentResult {
 }
 
 /**
- * Verifies student existence, active status, and course enrollment.
- * In Phase 1, PIN is not required (REQUIRE_PIN = false).
- * When authentication is added in future phases, PIN/OTP checks can be added here
- * without modifying any routes or forms.
+ * Verifies student existence, active status, course enrollment, and 4-digit PIN.
+ * Default PIN for all students is '1234'.
  */
 export async function verifyStudent(
   studentId: string,
-  courseId: string
+  courseId: string,
+  pin?: string
 ): Promise<VerifyStudentResult> {
   try {
     // 1. Check student exists and is active
     const studentRes = await query(
-      `SELECT id, roll_no, name, active, pin_hash FROM students WHERE id = $1`,
+      `SELECT id, roll_no, name, active, pin FROM students WHERE id = $1`,
       [studentId]
     );
 
@@ -51,6 +50,14 @@ export async function verifyStudent(
       return {
         valid: false,
         error: `Student ${student.name} (${student.roll_no}) is not enrolled in this course.`,
+      };
+    }
+
+    // 3. Verify Student PIN
+    if (!pin || pin.trim() !== student.pin) {
+      return {
+        valid: false,
+        error: 'Incorrect 4-digit Student PIN. (Default PIN: 1234)',
       };
     }
 

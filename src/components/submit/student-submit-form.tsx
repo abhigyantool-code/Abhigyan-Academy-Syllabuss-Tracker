@@ -23,6 +23,9 @@ import {
   Send,
   Layers,
   ShieldAlert,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface StudentSubmitFormProps {
@@ -43,6 +46,8 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [studentPin, setStudentPin] = useState<string>('');
+  const [showPin, setShowPin] = useState<boolean>(false);
   const [classCode, setClassCode] = useState<string>('');
   const [status, setStatus] = useState<'covered' | 'partial' | 'revision'>('covered');
   const [remarks, setRemarks] = useState<string>('');
@@ -147,6 +152,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
     setSelectedSubjectId('');
     setSelectedTopicId('');
     setSelectedStudentId('');
+    setStudentPin('');
     setStudentSearch('');
     setClassCode('');
     setErrorMessage(null);
@@ -190,6 +196,10 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
       setErrorMessage('Please select your student profile / roll number.');
       return;
     }
+    if (!studentPin.trim() || studentPin.trim().length < 4) {
+      setErrorMessage('Please enter your 4-digit Student PIN (Default: 1234).');
+      return;
+    }
     if (currentCourse?.require_class_code && !classCode.trim()) {
       setErrorMessage('Please enter the active class code shown on the classroom board.');
       return;
@@ -204,6 +214,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
         subjectId: selectedSubjectId,
         topicId: selectedTopicId,
         studentId: selectedStudentId,
+        pin: studentPin.trim(),
         classCode: classCode.trim().toUpperCase(),
         status,
         remarks: remarks || null,
@@ -282,6 +293,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             setSelectedTopicId('');
             setRemarks('');
             setClassCode('');
+            setStudentPin('');
           }}
           className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm py-3 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 active:scale-98"
         >
@@ -534,13 +546,53 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             )}
           </div>
 
-          {/* 5. Class Code (displayed only when require_class_code is true) */}
+          {/* 5. Student Authentication PIN */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
+                  5
+                </span>
+                Student PIN
+              </span>
+              <span className="text-[11px] font-normal text-zinc-400 font-mono">
+                Default: <span className="text-indigo-400 font-bold">1234</span>
+              </span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPin ? 'text' : 'password'}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                required
+                placeholder="Enter 4-digit PIN (e.g. 1234)"
+                value={studentPin}
+                onChange={(e) => setStudentPin(e.target.value.replace(/\D/g, ''))}
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm font-mono font-bold text-white tracking-widest placeholder-zinc-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                tabIndex={-1}
+                title={showPin ? 'Hide PIN' : 'Show PIN'}
+              >
+                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Protects your student serial number from proxy submissions by others.
+            </p>
+          </div>
+
+          {/* 6. Class Code (displayed only when require_class_code is true) */}
           {currentCourse?.require_class_code && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[11px] font-mono font-black">
-                    5
+                    6
                   </span>
                   Class Code
                 </span>
@@ -566,7 +618,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
               <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
-                {currentCourse?.require_class_code ? '6' : '5'}
+                {currentCourse?.require_class_code ? '7' : '6'}
               </span>
               Class Status
             </label>

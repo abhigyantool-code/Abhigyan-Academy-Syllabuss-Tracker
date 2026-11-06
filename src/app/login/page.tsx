@@ -5,11 +5,18 @@ import { redirect } from 'next/navigation';
 import { TeacherLoginForm } from '@/components/auth/teacher-login-form';
 
 export const metadata = {
-  title: 'Faculty & Portal Login — Abhigyan Academy',
-  description: 'Sign in to access your individual teacher dashboard and lecture records.',
+  title: 'Academy Portal Login — Abhigyan Academy',
+  description: 'Sign in to access your teacher workspace or director governance center.',
 };
 
-export default async function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<{ from?: string }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedParams = await searchParams;
+  const initialTab = resolvedParams?.from === 'admin' ? 'admin' : 'faculty';
+
   const session = await getSession();
   if (session) {
     if (session.role === 'faculty') {
@@ -53,13 +60,13 @@ export default async function LoginPage() {
             ABHIGYAN ACADEMY
           </h1>
           <p className="text-xs text-zinc-400">
-            Faculty Portal &bull; Individual Lecture Tracking System
+            Academy Portals &bull; Faculty Workspace &amp; Director Governance Center
           </p>
         </div>
 
-        {/* Teacher Login Card */}
+        {/* Login Card */}
         <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-          <TeacherLoginForm teachers={teachers} />
+          <TeacherLoginForm teachers={teachers} initialTab={initialTab} />
         </div>
 
         {/* Footer info */}

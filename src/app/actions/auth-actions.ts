@@ -49,6 +49,35 @@ export async function teacherLoginAction(teacherId: string, pin: string) {
   return { success: true };
 }
 
+export async function adminLoginAction(password: string) {
+  if (!password) {
+    throw new Error('Please enter the Director Master Password.');
+  }
+
+  const masterPassword = process.env.ADMIN_MASTER_PASSWORD || 'AbhigyanAdmin2026!';
+  if (password.trim() !== masterPassword) {
+    throw new Error('Incorrect Director Master Password. Access denied.');
+  }
+
+  // Create admin session
+  await createSession({
+    userId: 'admin-director-root',
+    role: 'admin',
+    name: 'Academy Director',
+  });
+
+  await logAudit({
+    action: 'ADMIN_LOGIN',
+    entity: 'admin',
+    entityId: 'admin-director-root',
+    after: { loggedInAt: new Date().toISOString() },
+  });
+
+  revalidatePath('/admin');
+  revalidatePath('/dashboard');
+  return { success: true };
+}
+
 export async function logoutAction() {
   const session = await getSession();
   if (session) {

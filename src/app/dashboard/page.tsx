@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { requireAccess } from '@/lib/auth-guard';
 import { getDashboardData } from '@/lib/dashboard-data';
 import { formatISTDate, formatISTDateTime } from '@/lib/date-utils';
-import { AuthDisabledBanner } from '@/components/auth-disabled-banner';
+import { logoutAction } from '@/app/actions/auth-actions';
 import { CumulativeChart } from '@/components/dashboard/cumulative-chart';
 import { TopicSheetTable } from '@/components/dashboard/topic-sheet-table';
 import {
@@ -23,6 +23,8 @@ import {
   ArrowDownRight,
   Activity,
   Flame,
+  UserCheck,
+  LogOut,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -30,7 +32,8 @@ interface DashboardPageProps {
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  await requireAccess('dashboard');
+  // Enforce session access: requires Faculty or Administrator
+  const access = await requireAccess('dashboard');
 
   const resolvedParams = await searchParams;
   const courseId = resolvedParams.course;
@@ -61,9 +64,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
-      {/* Notice Banner */}
-      <AuthDisabledBanner area="dashboard" />
-
       {/* Modern Executive Navigation Header */}
       <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
@@ -87,7 +87,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           {/* Quick Context & Portal Links */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <div className="hidden md:flex items-center gap-2 text-xs text-zinc-400 bg-zinc-900/80 border border-zinc-800/80 px-3 py-1.5 rounded-xl shadow-inner font-mono">
               <Calendar className="w-3.5 h-3.5 text-zinc-400" />
               <span>IST: <strong className="text-zinc-200">{formatISTDate(today)}</strong></span>
@@ -95,19 +95,41 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <Link
               href="/submit"
-              className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold px-3.5 py-1.5 rounded-xl transition-all border border-zinc-800 hover:border-zinc-700 shadow-sm"
+              className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all border border-zinc-800 hover:border-zinc-700 shadow-sm"
             >
               <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
               <span>Student Form</span>
             </Link>
 
-            <Link
-              href="/admin"
-              className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold px-3.5 py-1.5 rounded-xl transition-all border border-zinc-800 hover:border-zinc-700 shadow-sm"
-            >
-              <Shield className="w-3.5 h-3.5 text-violet-400" />
-              <span>Admin Center</span>
-            </Link>
+            {access.user?.role === 'faculty' && (
+              <Link
+                href="/teacher"
+                className="flex items-center gap-1.5 bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all border border-indigo-800/50 shadow-sm"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+                <span>My Workspace</span>
+              </Link>
+            )}
+
+            {access.user?.role === 'admin' && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 bg-violet-950/60 hover:bg-violet-900/60 text-violet-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all border border-violet-800/50 shadow-sm"
+              >
+                <Shield className="w-3.5 h-3.5 text-violet-400" />
+                <span>Admin Center</span>
+              </Link>
+            )}
+
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all border border-rose-500/30"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </form>
           </div>
         </div>
 

@@ -70,3 +70,44 @@ export function getTodayBoundsIST(ttlMinutes = 1440): { validFrom: Date; validUn
   const validUntil = new Date(now.getTime() + ttlMinutes * 60 * 1000);
   return { validFrom, validUntil };
 }
+
+/**
+ * Checks whether the current time in Asia/Kolkata falls within official academy hours:
+ * - Days: Monday to Saturday (Mon–Sat)
+ * - Time: 06:30 AM to 09:00 PM IST (06:30 – 21:00)
+ */
+export function checkAcademyHours(date: Date = new Date()): { allowed: boolean; reason?: string } {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE_IST,
+    hour12: false,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+  });
+
+  const parts = formatter.formatToParts(date);
+  const weekday = parts.find((p) => p.type === 'weekday')?.value; // "Sun", "Mon", etc.
+  const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10);
+  const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10);
+
+  if (weekday === 'Sun') {
+    return {
+      allowed: false,
+      reason: 'Class submissions are closed on Sundays. The academy operates Monday through Saturday.',
+    };
+  }
+
+  const currentMinutes = hour * 60 + minute;
+  const startMinutes = 6 * 60 + 30; // 06:30 AM IST (390 mins)
+  const endMinutes = 21 * 60; // 09:00 PM IST (1260 mins)
+
+  if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
+    return {
+      allowed: false,
+      reason:
+        'Class submissions are only open during academy lecture hours (06:30 AM – 09:00 PM IST, Mon–Sat). Please log during your scheduled lecture window.',
+    };
+  }
+
+  return { allowed: true };
+}

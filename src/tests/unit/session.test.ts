@@ -30,6 +30,28 @@ describe('Faculty Auth Session Token & Cryptography', () => {
     assert.equal(decoded.teacherId, 'teacher-uuid-1234');
   });
 
+  test('should sign and verify Director/Admin session payload', () => {
+    const adminPayload = {
+      userId: 'admin-director-root',
+      role: 'admin' as const,
+      name: 'Academy Director',
+      createdAt: Date.now(),
+    };
+
+    const data = Buffer.from(JSON.stringify(adminPayload)).toString('base64url');
+    const signature = crypto.createHmac('sha256', SECRET).update(data).digest('base64url');
+    const token = `${data}.${signature}`;
+
+    const [d, s] = token.split('.');
+    assert.equal(d, data);
+    const expectedSig = crypto.createHmac('sha256', SECRET).update(d).digest('base64url');
+    assert.equal(s, expectedSig);
+
+    const decoded = JSON.parse(Buffer.from(d, 'base64url').toString('utf-8'));
+    assert.equal(decoded.role, 'admin');
+    assert.equal(decoded.name, 'Academy Director');
+  });
+
   test('should reject tampered or modified session token', () => {
     const payload = {
       userId: 'teacher-uuid-1234',

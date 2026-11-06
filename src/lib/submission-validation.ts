@@ -7,6 +7,10 @@ export const submitEntrySchema = z.object({
   subjectId: z.string().uuid('Please select a subject'),
   topicId: z.string().uuid('Please select a curriculum topic'),
   studentId: z.string().uuid('Please select your roll number / name'),
+  pin: z
+    .string()
+    .min(4, 'Student PIN must be at least 4 digits')
+    .max(8, 'Student PIN cannot exceed 8 digits'),
   classCode: z.string().optional().default(''),
   status: z.enum(['covered', 'partial', 'revision']),
   remarks: z

@@ -46,8 +46,9 @@ CREATE TABLE IF NOT EXISTS topics (
 -- 5. Teachers Table
 CREATE TABLE IF NOT EXISTS teachers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     phone TEXT,
+    pin TEXT NOT NULL DEFAULT '1234', -- 4-digit faculty login PIN
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS students (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roll_no TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
+    pin TEXT NOT NULL DEFAULT '1234', -- 4-digit student authentication PIN
     pin_hash TEXT, -- Phase 1: nullable and unused
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

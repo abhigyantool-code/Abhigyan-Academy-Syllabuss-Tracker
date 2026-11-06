@@ -10,7 +10,7 @@ test.describe('Teacher Portal & Isolated Sessions', () => {
   test('should reject incorrect PIN with user-friendly error', async ({ page }) => {
     await page.goto('/login');
     // Select Dipyaman Sir if not already selected
-    await page.selectOption('select', { label: /Dipyaman Sir/ });
+    await page.selectOption('select', { label: 'Dipyaman Sir' });
     await page.fill('input[type="password"]', '9999');
     await page.click('button[type="submit"]');
 
@@ -20,7 +20,7 @@ test.describe('Teacher Portal & Isolated Sessions', () => {
 
   test('should log in successfully with PIN 1234 and isolate to teacher subjects', async ({ page }) => {
     await page.goto('/login');
-    await page.selectOption('select', { label: /Dipyaman Sir/ });
+    await page.selectOption('select', { label: 'Dipyaman Sir' });
     await page.fill('input[type="password"]', '1234');
     await page.click('button[type="submit"]');
 
@@ -36,7 +36,7 @@ test.describe('Teacher Portal & Isolated Sessions', () => {
 
   test('should log in as Pallabi Bhuyan Ma\'am and show only Biology', async ({ page }) => {
     await page.goto('/login');
-    await page.selectOption('select', { label: /Pallabi Bhuyan Ma'am/ });
+    await page.selectOption('select', { label: 'Pallabi Bhuyan Ma\'am' });
     await page.fill('input[type="password"]', '1234');
     await page.click('button[type="submit"]');
 

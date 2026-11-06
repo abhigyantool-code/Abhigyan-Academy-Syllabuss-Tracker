@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { getTodayIST } from '@/lib/date-utils';
+import { getTodayIST, checkAcademyHours } from '@/lib/date-utils';
 import { verifyStudent } from '@/lib/student-guard';
 import { submitEntrySchema, analyzeMisuseFlags } from '@/lib/submission-validation';
 
@@ -8,7 +8,13 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // 1. Zod Validation
+    // 1. Active Academy Hours Check (06:30 AM - 09:00 PM IST, Mon-Sat)
+    const hoursCheck = checkAcademyHours();
+    if (!hoursCheck.allowed) {
+      return NextResponse.json({ error: hoursCheck.reason }, { status: 400 });
+    }
+
+    // 2. Zod Validation
     const parseResult = submitEntrySchema.safeParse(body);
     if (!parseResult.success) {
       const firstError =
@@ -20,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     const input = parseResult.data;
 
-    // 2. Honeypot check
+    // 3. Honeypot check
     if (input.websiteUrlHp && input.websiteUrlHp.trim().length > 0) {
       // Bot trapped: return simulated success without writing to database
       return NextResponse.json(
@@ -34,10 +40,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Server-enforced IST Date
+    // 4. Server-enforced IST Date
     const classDate = getTodayIST();
 
-    // 4. Check Course exists & active
+    // 5. Anti-Proxy Device Check (Prevent 1 phone submitting for many students)
+    const deviceReuseRes = await query(
+      `SELECT COUNT(DISTINCT student_id) as count 
+       FROM entries 
+       WHERE device_id = $1 
+         AND created_at >= now() - interval '24 hours' 
+         AND student_id != $2`,
+      [input.deviceId, input.studentId]
+    );
+
+    const otherStudentsLoggedFromDevice = Number(deviceReuseRes.rows[0]?.count || 0);
+    if (otherStudentsLoggedFromDevice >= 2) {
+      return NextResponse.json(
+        {
+          error:
+            'Device limit reached: This device has logged entries for multiple other students in the last 24 hours. To ensure syllabus integrity, please submit from your own device.',
+        },
+        { status: 429 }
+      );
+    }
+
+    // 6. Check Course exists & active
     const courseRes = await query(
       `SELECT c.id, c.name, c.code, c.active,
               cs.confirmation_threshold, cs.daily_entry_cap, cs.require_class_code
@@ -58,7 +85,7 @@ export async function POST(request: NextRequest) {
     const requireCode = Boolean(courseSettings.require_class_code);
     const dailyCap = Number(courseSettings.daily_entry_cap || 6);
 
-    // 5. Class Code Verification
+    // 7. Class Code Verification
     let classCodeId: string | null = null;
     if (requireCode) {
       if (!input.classCode || !input.classCode.trim()) {
@@ -91,13 +118,13 @@ export async function POST(request: NextRequest) {
       classCodeId = codeCheckRes.rows[0].id;
     }
 
-    // 6. Student Verification Hook (active & enrolled)
-    const studentCheck = await verifyStudent(input.studentId, input.courseId);
+    // 8. Student Verification & PIN Check (active, enrolled & 4-digit PIN)
+    const studentCheck = await verifyStudent(input.studentId, input.courseId, input.pin);
     if (!studentCheck.valid) {
       return NextResponse.json({ error: studentCheck.error }, { status: 400 });
     }
 
-    // 7. Relational Verification: Teacher assigned to Subject
+    // 9. Relational Verification: Teacher assigned to Subject
     const teacherSubjectRes = await query(
       `SELECT 1 FROM teacher_subjects WHERE teacher_id = $1 AND subject_id = $2`,
       [input.teacherId, input.subjectId]
@@ -110,7 +137,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 8. Relational Verification: Topic belongs to Subject
+    // 10. Relational Verification: Topic belongs to Subject
     const topicRes = await query(
       `SELECT id, name FROM topics WHERE id = $1 AND subject_id = $2`,
       [input.topicId, input.subjectId]
@@ -124,7 +151,7 @@ export async function POST(request: NextRequest) {
     }
     const topicName = topicRes.rows[0].name;
 
-    // 9. Duplicate Protection: UNIQUE (student_id, topic_id, class_date)
+    // 11. Duplicate Protection: UNIQUE (student_id, topic_id, class_date)
     const dupRes = await query(
       `SELECT id FROM entries WHERE student_id = $1 AND topic_id = $2 AND class_date = $3`,
       [input.studentId, input.topicId, classDate]
@@ -140,7 +167,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 10. Daily Entry Cap Check
+    // 12. Daily Entry Cap Check
     const capRes = await query(
       `SELECT COUNT(*) as count FROM entries WHERE student_id = $1 AND class_date = $2`,
       [input.studentId, classDate]
@@ -156,7 +183,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 11. Anti-Misuse Flagging Engine (Store & Flag, never drop)
+    // 13. Anti-Misuse Flagging Engine (Store & Flag, never drop)
     const { flags, reviewStatus } = await analyzeMisuseFlags({
       courseId: input.courseId,
       subjectId: input.subjectId,
@@ -165,7 +192,7 @@ export async function POST(request: NextRequest) {
       deviceId: input.deviceId,
     });
 
-    // 12. Insert Entry
+    // 14. Insert Entry
     const insertRes = await query(
       `INSERT INTO entries (
         course_id, student_id, teacher_id, subject_id, topic_id,

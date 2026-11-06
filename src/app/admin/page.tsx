@@ -3,21 +3,18 @@ import Link from 'next/link';
 import { requireAccess } from '@/lib/auth-guard';
 import { getAdminInitialData } from '@/lib/admin-data';
 import { formatISTDate } from '@/lib/date-utils';
-import { AuthDisabledBanner } from '@/components/auth-disabled-banner';
+import { logoutAction } from '@/app/actions/auth-actions';
 import { AdminPanelClient } from '@/components/admin/admin-panel-client';
-import { Shield, GraduationCap, LayoutDashboard, Calendar, Settings } from 'lucide-react';
+import { Shield, GraduationCap, LayoutDashboard, Calendar, LogOut } from 'lucide-react';
 
 export default async function AdminPage() {
-  // Guard access
-  await requireAccess('admin');
+  // Guard access: Enforces Director / Administrator session
+  const access = await requireAccess('admin');
 
   const initialData = await getAdminInitialData();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Banner */}
-      <AuthDisabledBanner area="admin" />
-
       {/* Main Admin Navigation Header */}
       <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
@@ -29,10 +26,10 @@ export default async function AdminPage() {
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-bold text-white tracking-tight">ABHIGYAN ACADEMY</h1>
                 <span className="text-[10px] font-mono uppercase bg-violet-500/20 text-violet-300 border border-violet-500/30 px-1.5 py-0.5 rounded font-semibold">
-                  Admin Console
+                  Director Console
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Curriculum, Faculty, Student Roster & Code Governance</p>
+              <p className="text-xs text-slate-400">Curriculum, Faculty, Student Roster &amp; Code Governance</p>
             </div>
           </div>
 
@@ -55,8 +52,18 @@ export default async function AdminPage() {
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
             >
               <LayoutDashboard className="w-3.5 h-3.5 text-sky-400" />
-              <span>Faculty Dashboard</span>
+              <span>Executive Dashboard</span>
             </Link>
+
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border border-rose-500/30"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </form>
           </div>
         </div>
       </header>
