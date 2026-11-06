@@ -1,8 +1,7 @@
-// Central Access Guard Function (Phase 1: No Auth Mode)
-// When authentication is implemented in Phase 2, this will verify sessions, tokens, and roles
-// WITHOUT rewriting any route handlers or page layouts.
+import { getSession } from './session';
+import { redirect } from 'next/navigation';
 
-export type AccessArea = 'admin' | 'dashboard' | 'submit';
+export type AccessArea = 'admin' | 'dashboard' | 'submit' | 'faculty';
 
 export interface AccessResult {
   allowed: boolean;
@@ -11,21 +10,47 @@ export interface AccessResult {
     id: string;
     role: string;
     label: string;
+    teacherId?: string;
   } | null;
   reason?: string;
 }
 
 export async function requireAccess(area: AccessArea): Promise<AccessResult> {
-  // Phase 1: Authentication is completely disabled.
-  // Unrestricted access for all areas.
+  const session = await getSession();
+
+  // If accessing faculty portal, enforce faculty or admin session
+  if (area === 'faculty') {
+    if (!session || (session.role !== 'faculty' && session.role !== 'admin')) {
+      redirect('/login');
+    }
+    return {
+      allowed: true,
+      area,
+      user: {
+        id: session.userId,
+        role: session.role,
+        label: session.name,
+        teacherId: session.teacherId,
+      },
+    };
+  }
+
+  // Phase 1 open routes for review: admin, dashboard, submit
   return {
     allowed: true,
     area,
-    user: {
-      id: 'phase1-guest',
-      role: area === 'admin' ? 'admin' : area === 'dashboard' ? 'faculty' : 'student',
-      label: 'Guest Access (Auth Disabled)',
-    },
+    user: session
+      ? {
+          id: session.userId,
+          role: session.role,
+          label: session.name,
+          teacherId: session.teacherId,
+        }
+      : {
+          id: 'guest',
+          role: area === 'admin' ? 'admin' : area === 'dashboard' ? 'faculty' : 'student',
+          label: 'Guest Access',
+        },
   };
 }
 
