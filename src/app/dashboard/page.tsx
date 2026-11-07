@@ -27,6 +27,8 @@ import {
   LogOut,
 } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 interface DashboardPageProps {
   searchParams: Promise<{ course?: string }>;
 }

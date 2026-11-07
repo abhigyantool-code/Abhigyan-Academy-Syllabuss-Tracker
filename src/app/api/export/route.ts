@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { requireAccess } from '@/lib/auth-guard';
 
+export const dynamic = 'force-dynamic';
+
 function escapeCsv(val: any): string {
   if (val === null || val === undefined) return '';
   const str = String(val);

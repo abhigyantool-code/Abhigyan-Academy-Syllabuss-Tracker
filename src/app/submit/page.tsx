@@ -5,6 +5,8 @@ import { getSubmitFormData } from '@/lib/submit-data';
 import { StudentSubmitForm } from '@/components/submit/student-submit-form';
 import { GraduationCap, LayoutDashboard, Shield, ShieldCheck } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default async function SubmitPage() {
   await requireAccess('submit');
 

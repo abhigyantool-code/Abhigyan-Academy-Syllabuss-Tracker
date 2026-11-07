@@ -9,6 +9,8 @@ export const metadata = {
   description: 'Sign in to access your teacher workspace or director governance center.',
 };
 
+export const dynamic = 'force-dynamic';
+
 interface LoginPageProps {
   searchParams: Promise<{ from?: string }>;
 }

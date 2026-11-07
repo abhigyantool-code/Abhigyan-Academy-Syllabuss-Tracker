@@ -5,8 +5,11 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
+# Ensure devDependencies are installed even if Coolify injects --build-arg NODE_ENV=production
+ENV NODE_ENV=development
+
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --include=dev
 
 # 2. Build the application
 FROM base AS builder
@@ -16,6 +19,8 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV DATABASE_URL="postgres://postgres:postgres@localhost:5432/syllabus_tracker"
+ENV SESSION_SECRET="build-time-secret-key-must-be-at-least-32-chars-long"
 
 RUN npm run build
 

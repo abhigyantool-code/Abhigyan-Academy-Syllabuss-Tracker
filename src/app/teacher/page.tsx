@@ -9,6 +9,8 @@ export const metadata = {
   description: 'Dedicated individual teacher dashboard for lecture pacing and syllabus verification.',
 };
 
+export const dynamic = 'force-dynamic';
+
 interface TeacherPageProps {
   searchParams: Promise<{ subject?: string }>;
 }

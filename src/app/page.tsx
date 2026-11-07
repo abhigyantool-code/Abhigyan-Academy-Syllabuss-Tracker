@@ -3,6 +3,8 @@ import { query } from '@/lib/db';
 import { getTodayIST, formatISTDate } from '@/lib/date-utils';
 import { BookOpen, GraduationCap, LayoutDashboard, Shield, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default async function Home() {
   const today = getTodayIST();
   let dbStatus = 'connected';

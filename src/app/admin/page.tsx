@@ -7,6 +7,8 @@ import { logoutAction } from '@/app/actions/auth-actions';
 import { AdminPanelClient } from '@/components/admin/admin-panel-client';
 import { Shield, GraduationCap, LayoutDashboard, Calendar, LogOut, Download } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminPage() {
   // Guard access: Enforces Director / Administrator session
   const access = await requireAccess('admin');
