@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5432/syllabus_tracker}
+      - SESSION_SECRET=${SESSION_SECRET:-c68f9a2e1d4b8e7c5f3a0d9b8e7f6a5c4d3b2a1e0f9a8b7c6d5e4f3a2b1c0d9e}
+      - ADMIN_MASTER_PASSWORD=${ADMIN_MASTER_PASSWORD:-AbhigyanAdmin2026!}
+      - REQUIRE_PIN=true
+      - REQUIRE_CLASS_CODE=false
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: syllabus_tracker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/production_init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+
+volumes:
+  pgdata:
