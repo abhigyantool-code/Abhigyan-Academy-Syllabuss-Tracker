@@ -85,7 +85,7 @@ export async function getAdminInitialData() {
     JOIN subjects sub ON sub.id = e.subject_id
     JOIN topics top ON top.id = e.topic_id
     JOIN courses c ON c.id = e.course_id
-    WHERE e.review_status = 'pending'
+    WHERE LOWER(e.review_status) IN ('pending', 'flagged')
     ORDER BY e.created_at DESC
   `);
 

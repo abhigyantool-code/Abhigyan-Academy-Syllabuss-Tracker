@@ -195,10 +195,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <a
               href={`/api/export?type=entries&courseId=${selectedCourse.id}`}
               download
+              title="Export Report"
               className="flex items-center gap-2 bg-zinc-950/80 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold px-3.5 py-2 rounded-xl border border-zinc-800/80 hover:border-zinc-700 transition-all shadow-sm"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Export Entries CSV</span>
+              <span>Export Report</span>
             </a>
           </div>
         </div>

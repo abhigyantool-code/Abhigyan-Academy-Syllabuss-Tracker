@@ -156,6 +156,46 @@ export async function teacherEndorseTopicAction(topicId: string, subjectId: stri
   return { success: true };
 }
 
+export async function changeStudentPinAction(studentIdentifier: string, currentPin: string, newPin: string) {
+  if (!studentIdentifier || !currentPin || !newPin) {
+    throw new Error('All fields are required.');
+  }
+
+  if (!/^\d{4,8}$/.test(newPin)) {
+    throw new Error('New PIN must be 4–8 numeric digits.');
+  }
+
+  // Support lookup by UUID or by roll_no / serial number (e.g. NDA-01)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentIdentifier);
+  const res = isUuid
+    ? await query(`SELECT id, pin FROM students WHERE id = $1 LIMIT 1`, [studentIdentifier])
+    : await query(`SELECT id, pin FROM students WHERE roll_no = $1 OR id::text = $1 LIMIT 1`, [studentIdentifier]);
+
+  if (res.rows.length === 0) {
+    throw new Error('Student not found.');
+  }
+
+  const student = res.rows[0];
+
+  if (student.pin !== currentPin.trim()) {
+    throw new Error('Current PIN is incorrect.');
+  }
+
+  await query(`UPDATE students SET pin = $1 WHERE id = $2`, [newPin.trim(), student.id]);
+
+  await logAudit({
+    action: 'STUDENT_CHANGE_PIN',
+    entity: 'students',
+    entityId: student.id,
+    before: { pin: '[REDACTED]' },
+    after: { pin: '[REDACTED]' },
+  });
+
+  return { success: true };
+}
+
+export const changeStudentPin = changeStudentPinAction;
+
 export async function updateTeacherPinAction(oldPin: string, newPin: string) {
   const session = await getSession();
   if (!session || session.role !== 'faculty' || !session.teacherId) {

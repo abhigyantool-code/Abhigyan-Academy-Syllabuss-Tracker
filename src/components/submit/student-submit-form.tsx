@@ -26,7 +26,9 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Settings,
 } from 'lucide-react';
+import { changeStudentPinAction } from '@/app/actions/auth-actions';
 
 interface StudentSubmitFormProps {
   initialData: {
@@ -71,6 +73,14 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
     reviewStatus: string;
     message: string;
   } | null>(null);
+
+  // Change PIN modal state
+  const [showChangePinModal, setShowChangePinModal] = useState(false);
+  const [changePinCurrentPin, setChangePinCurrentPin] = useState('');
+  const [changePinNewPin, setChangePinNewPin] = useState('');
+  const [changePinConfirm, setChangePinConfirm] = useState('');
+  const [changePinMsg, setChangePinMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [changePinBusy, setChangePinBusy] = useState(false);
 
   // Initialize or read device_id cookie on mount
   useEffect(() => {
@@ -239,6 +249,39 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
       setErrorMessage(err.message || 'An error occurred while submitting.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle student PIN change
+  const handleChangePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePinMsg(null);
+
+    if (!selectedStudentId) {
+      setChangePinMsg({ text: 'Please select your student profile first (Step 4).', type: 'error' });
+      return;
+    }
+    if (!/^\d{4,8}$/.test(changePinNewPin)) {
+      setChangePinMsg({ text: 'New PIN must be 4–8 numeric digits.', type: 'error' });
+      return;
+    }
+    if (changePinNewPin !== changePinConfirm) {
+      setChangePinMsg({ text: 'New PIN and Confirm PIN do not match.', type: 'error' });
+      return;
+    }
+
+    setChangePinBusy(true);
+    try {
+      await changeStudentPinAction(selectedStudentId, changePinCurrentPin, changePinNewPin);
+      setChangePinMsg({ text: 'PIN changed successfully! Use your new PIN for future logins.', type: 'success' });
+      setChangePinCurrentPin('');
+      setChangePinNewPin('');
+      setChangePinConfirm('');
+      setStudentPin(changePinNewPin);
+    } catch (err: any) {
+      setChangePinMsg({ text: err.message || 'PIN change failed.', type: 'error' });
+    } finally {
+      setChangePinBusy(false);
     }
   };
 
@@ -584,6 +627,17 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             <p className="text-[11px] text-zinc-500">
               Protects your student serial number from proxy submissions by others.
             </p>
+            {/* Change PIN link */}
+            {selectedStudentId && (
+              <button
+                type="button"
+                onClick={() => { setShowChangePinModal(true); setChangePinMsg(null); }}
+                className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold mt-0.5 transition-colors"
+              >
+                <Settings className="w-3 h-3" />
+                ⚙️ Change My PIN
+              </button>
+            )}
           </div>
 
           {/* 6. Class Code (displayed only when require_class_code is true) */}
@@ -708,6 +762,92 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
       <p className="text-center text-[11px] text-zinc-500 font-mono">
         Anti-misuse duplicate protection enabled &bull; Class date automatically stamped in IST
       </p>
+
+      {/* Change PIN Modal */}
+      {showChangePinModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Settings className="w-4 h-4 text-indigo-400" />
+              Change My PIN
+            </h3>
+            {selectedStudentObj && (
+              <p className="text-xs text-zinc-400">
+                Changing PIN for <strong className="text-zinc-200">{selectedStudentObj.name}</strong> ({selectedStudentObj.roll_no}).
+              </p>
+            )}
+            {changePinMsg && (
+              <div
+                className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between ${
+                  changePinMsg.type === 'success'
+                    ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                    : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                }`}
+              >
+                <span>{changePinMsg.text}</span>
+                <button onClick={() => setChangePinMsg(null)} className="text-zinc-400 hover:text-white">&times;</button>
+              </div>
+            )}
+            <form onSubmit={handleChangePinSubmit} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-400 block mb-1">Current PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  required
+                  maxLength={8}
+                  value={changePinCurrentPin}
+                  onChange={(e) => setChangePinCurrentPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter current PIN"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-400 block mb-1">New PIN (4–8 digits)</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  required
+                  maxLength={8}
+                  value={changePinNewPin}
+                  onChange={(e) => setChangePinNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter new PIN"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-400 block mb-1">Confirm New PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  required
+                  maxLength={8}
+                  value={changePinConfirm}
+                  onChange={(e) => setChangePinConfirm(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Confirm new PIN"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowChangePinModal(false); setChangePinMsg(null); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={changePinBusy}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
+                >
+                  {changePinBusy ? 'Saving…' : 'Save New PIN'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

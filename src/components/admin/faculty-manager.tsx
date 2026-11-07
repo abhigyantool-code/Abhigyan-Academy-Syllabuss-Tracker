@@ -5,8 +5,9 @@ import {
   createTeacherAction,
   updateTeacherAction,
   assignTeacherSubjectsAction,
+  resetTeacherPinAction,
 } from '@/app/actions/admin-actions';
-import { Plus, Edit2, BookOpen, CheckCircle, XCircle, Phone, UserCheck } from 'lucide-react';
+import { Plus, Edit2, BookOpen, KeyRound } from 'lucide-react';
 
 interface TeacherItem {
   id: string;
@@ -36,6 +37,11 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
   const [allocatingTeacher, setAllocatingTeacher] = useState<TeacherItem | null>(null);
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // PIN Reset state
+  const [pinResetTeacher, setPinResetTeacher] = useState<TeacherItem | null>(null);
+  const [newPin, setNewPin] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
 
   // New form
   const [name, setName] = useState('');
@@ -92,6 +98,26 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
     setSelectedSubjectIds((prev) =>
       prev.includes(sId) ? prev.filter((id) => id !== sId) : [...prev, sId]
     );
+  };
+
+  const handlePinReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pinResetTeacher) return;
+    if (!/^\d{4,8}$/.test(newPin)) {
+      setMsg({ text: 'PIN must be 4–8 numeric digits.', type: 'error' });
+      return;
+    }
+    setPinBusy(true);
+    try {
+      await resetTeacherPinAction(pinResetTeacher.id, newPin);
+      setPinResetTeacher(null);
+      setNewPin('');
+      setMsg({ text: `PIN for ${pinResetTeacher.name} reset successfully!`, type: 'success' });
+    } catch (err: any) {
+      setMsg({ text: err.message || 'PIN reset failed', type: 'error' });
+    } finally {
+      setPinBusy(false);
+    }
   };
 
   return (
@@ -172,6 +198,13 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
                     >
                       <BookOpen className="w-3 h-3" />
                       <span>Assign</span>
+                    </button>
+                    <button
+                      onClick={() => { setPinResetTeacher(tea); setNewPin(''); }}
+                      className="p-1 rounded hover:bg-amber-500/20 text-amber-400 hover:text-amber-300"
+                      title="Reset PIN"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => setEditingTeacher(tea)}
@@ -290,6 +323,52 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
                 Save Allocations
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* PIN Reset Modal — Faculty */}
+      {pinResetTeacher && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              Reset PIN — {pinResetTeacher.name}
+            </h3>
+            <p className="text-xs text-slate-400">
+              Enter a new 4–8 digit numeric PIN for this faculty member. Their current PIN will be replaced immediately.
+            </p>
+            <form onSubmit={handlePinReset} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">New PIN (4–8 digits)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4,8}"
+                  required
+                  maxLength={8}
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="e.g. 1234"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setPinResetTeacher(null); setNewPin(''); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pinBusy}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
+                >
+                  {pinBusy ? 'Resetting…' : 'Reset PIN'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

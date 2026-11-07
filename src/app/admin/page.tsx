@@ -5,7 +5,7 @@ import { getAdminInitialData } from '@/lib/admin-data';
 import { formatISTDate } from '@/lib/date-utils';
 import { logoutAction } from '@/app/actions/auth-actions';
 import { AdminPanelClient } from '@/components/admin/admin-panel-client';
-import { Shield, GraduationCap, LayoutDashboard, Calendar, LogOut } from 'lucide-react';
+import { Shield, GraduationCap, LayoutDashboard, Calendar, LogOut, Download } from 'lucide-react';
 
 export default async function AdminPage() {
   // Guard access: Enforces Director / Administrator session
@@ -45,6 +45,15 @@ export default async function AdminPage() {
             >
               <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
               <span>Student Form</span>
+            </Link>
+
+            <Link
+              href="/api/export?type=entries&courseId=all"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+              title="Download all entries as CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Export CSV</span>
             </Link>
 
             <Link

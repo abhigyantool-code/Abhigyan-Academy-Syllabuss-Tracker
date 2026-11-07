@@ -5,8 +5,9 @@ import {
   createStudentAction,
   updateStudentAction,
   bulkImportStudentsCsvAction,
+  resetStudentPinAction,
 } from '@/app/actions/admin-actions';
-import { Plus, Edit2, Upload, Download, Users, GraduationCap, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit2, Upload, Download, KeyRound } from 'lucide-react';
 
 interface StudentItem {
   id: string;
@@ -36,6 +37,11 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
     `Roll No,Name,Course Code\nABG-2026-011,Vikas Tripathi,NDA\nABG-2026-012,Rohan Malhotra,CDS\nABG-2026-013,Sneha Kulkarni,SSB`
   );
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // PIN Reset state
+  const [pinResetStudent, setPinResetStudent] = useState<StudentItem | null>(null);
+  const [newPin, setNewPin] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
 
   // New form state
   const [rollNo, setRollNo] = useState('');
@@ -83,6 +89,26 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
       setMsg({ text: `Imported ${res.count} students successfully!`, type: 'success' });
     } catch (err: any) {
       setMsg({ text: err.message || 'Bulk import failed', type: 'error' });
+    }
+  };
+
+  const handlePinReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pinResetStudent) return;
+    if (!/^\d{4,8}$/.test(newPin)) {
+      setMsg({ text: 'PIN must be 4–8 numeric digits.', type: 'error' });
+      return;
+    }
+    setPinBusy(true);
+    try {
+      await resetStudentPinAction(pinResetStudent.id, newPin);
+      setPinResetStudent(null);
+      setNewPin('');
+      setMsg({ text: `PIN for ${pinResetStudent.name} reset successfully!`, type: 'success' });
+    } catch (err: any) {
+      setMsg({ text: err.message || 'PIN reset failed', type: 'error' });
+    } finally {
+      setPinBusy(false);
     }
   };
 
@@ -138,7 +164,7 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
               <th className="py-2.5 px-4 border-r border-slate-800/80">Student Name</th>
               <th className="py-2.5 px-4 border-r border-slate-800/80">Enrolled Courses</th>
               <th className="py-2.5 px-3 w-28 text-center border-r border-slate-800/80">Status</th>
-              <th className="py-2.5 px-3 w-24 text-right">Actions</th>
+              <th className="py-2.5 px-3 w-32 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 font-sans">
@@ -167,13 +193,22 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
                   </span>
                 </td>
                 <td className="py-2.5 px-3 text-right">
-                  <button
-                    onClick={() => setEditingStudent(stu)}
-                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
-                    title="Edit Student"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => { setPinResetStudent(stu); setNewPin(''); }}
+                      className="p-1 rounded hover:bg-amber-500/20 text-amber-400 hover:text-amber-300"
+                      title="Reset PIN"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditingStudent(stu)}
+                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+                      title="Edit Student"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -384,6 +419,52 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
                 Import Students
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* PIN Reset Modal */}
+      {pinResetStudent && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              Reset PIN — {pinResetStudent.name}
+            </h3>
+            <p className="text-xs text-slate-400">
+              Enter a new 4–8 digit numeric PIN for this student. Their current PIN will be replaced immediately.
+            </p>
+            <form onSubmit={handlePinReset} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">New PIN (4–8 digits)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{4,8}"
+                  required
+                  maxLength={8}
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="e.g. 1234"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setPinResetStudent(null); setNewPin(''); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pinBusy}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
+                >
+                  {pinBusy ? 'Resetting…' : 'Reset PIN'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

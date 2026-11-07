@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS entries (
     class_code_id UUID REFERENCES class_codes(id) ON DELETE SET NULL,
     device_id TEXT NOT NULL,
     flags JSONB NOT NULL DEFAULT '[]'::jsonb,
-    review_status TEXT NOT NULL DEFAULT 'auto' CHECK (review_status IN ('auto', 'pending', 'approved', 'rejected')),
+    review_status TEXT NOT NULL DEFAULT 'auto' CHECK (review_status IN ('auto', 'pending', 'approved', 'rejected', 'CLEARED', 'VIOLATION', 'FLAGGED', 'cleared', 'violation', 'flagged')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT unique_student_topic_date UNIQUE (student_id, topic_id, class_date)
 );

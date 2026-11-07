@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { reviewEntryAction } from '@/app/actions/admin-actions';
+import { clearFlaggedEntry, confirmViolation } from '@/app/actions/admin-actions';
 import { formatISTDate, formatISTDateTime } from '@/lib/date-utils';
 import { ShieldAlert, CheckCircle2, XCircle, AlertTriangle, Smartphone, User, BookOpen } from 'lucide-react';
 
@@ -32,14 +32,22 @@ export function ReviewQueue({ entries }: ReviewQueueProps) {
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const handleReview = async (entryId: string, action: 'approved' | 'rejected') => {
+  const handleReview = async (entryId: string, action: 'CLEARED' | 'VIOLATION') => {
     setProcessingId(entryId);
     try {
-      await reviewEntryAction(entryId, action);
-      setMsg({
-        text: `Entry has been ${action === 'approved' ? 'approved and counted toward syllabus coverage' : 'rejected'}.`,
-        type: 'success',
-      });
+      if (action === 'CLEARED') {
+        await clearFlaggedEntry(entryId);
+        setMsg({
+          text: `Entry cleared and approved for syllabus coverage.`,
+          type: 'success',
+        });
+      } else {
+        await confirmViolation(entryId);
+        setMsg({
+          text: `Entry marked as violation and rejected.`,
+          type: 'success',
+        });
+      }
     } catch (err: any) {
       setMsg({ text: err.message || 'Review action failed', type: 'error' });
     } finally {
@@ -157,20 +165,20 @@ export function ReviewQueue({ entries }: ReviewQueueProps) {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleReview(e.id, 'rejected')}
+                    onClick={() => handleReview(e.id, 'VIOLATION')}
                     disabled={processingId === e.id}
                     className="flex items-center gap-1 bg-slate-950 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    <span>Reject Submission</span>
+                    <span>❌ Confirm Violation</span>
                   </button>
                   <button
-                    onClick={() => handleReview(e.id, 'approved')}
+                    onClick={() => handleReview(e.id, 'CLEARED')}
                     disabled={processingId === e.id}
                     className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-colors shadow-sm disabled:opacity-50"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Approve as Valid</span>
+                    <span>✅ Clear</span>
                   </button>
                 </div>
               </div>
