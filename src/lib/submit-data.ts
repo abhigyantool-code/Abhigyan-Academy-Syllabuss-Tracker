@@ -36,13 +36,23 @@ export interface SubmitStudent {
   course_id: string;
 }
 
-export async function getSubmitFormData() {
+let cachedSubmitData: { data: any; expiry: number } | null = null;
+
+export async function getSubmitFormData(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedSubmitData && cachedSubmitData.expiry > now) {
+    return cachedSubmitData.data;
+  }
+
   const pb = await getPbClient();
 
-  // 1. Courses with settings
-  const [courses, settings] = await Promise.all([
+  // Fetch all prerequisite datasets in parallel
+  const [courses, settings, teacherSubjects, topics, enrollments] = await Promise.all([
     pb.collection('courses').getFullList({ filter: 'active = true', sort: 'sort_order' }),
     pb.collection('course_settings').getFullList(),
+    pb.collection('teacher_subjects').getFullList({ expand: 'teacher,subject' }),
+    pb.collection('topics').getFullList({ sort: 'seq_no' }),
+    pb.collection('enrollments').getFullList({ expand: 'student' }),
   ]);
 
   const settingsMap = new Map(settings.map((s) => [s.course, s]));
@@ -53,11 +63,6 @@ export async function getSubmitFormData() {
     sort_order: c.sort_order || 0,
     require_class_code: settingsMap.get(c.id)?.require_class_code ?? false,
   }));
-
-  // 2 & 3. Teachers & Subjects via teacher_subjects mapping
-  const teacherSubjects = await pb.collection('teacher_subjects').getFullList({
-    expand: 'teacher,subject',
-  });
 
   const teacherMap = new Map<string, SubmitTeacher>();
   const subjectMap = new Map<string, SubmitSubject>();
@@ -88,8 +93,6 @@ export async function getSubmitFormData() {
     }
   }
 
-  // 4. Topics
-  const topics = await pb.collection('topics').getFullList({ sort: 'seq_no' });
   const topicList: SubmitTopic[] = topics.map((t) => ({
     id: t.id,
     subject_id: t.subject,
@@ -97,11 +100,6 @@ export async function getSubmitFormData() {
     seq_no: t.seq_no,
     target_date: t.target_date ? t.target_date.split(' ')[0] : null,
   }));
-
-  // 5. Students via enrollments
-  const enrollments = await pb.collection('enrollments').getFullList({
-    expand: 'student',
-  });
 
   const studentList: SubmitStudent[] = [];
   for (const en of enrollments) {
@@ -118,11 +116,14 @@ export async function getSubmitFormData() {
 
   studentList.sort((a, b) => a.roll_no.localeCompare(b.roll_no));
 
-  return {
+  const result = {
     courses: courseList,
     teachers: Array.from(teacherMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
     subjects: Array.from(subjectMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
     topics: topicList,
     students: studentList,
   };
+
+  cachedSubmitData = { data: result, expiry: now + 60_000 };
+  return result;
 }

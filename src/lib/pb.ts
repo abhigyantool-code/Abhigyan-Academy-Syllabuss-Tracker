@@ -26,6 +26,25 @@ export async function getPbClient(): Promise<PocketBase> {
       if (!pbInstance) {
         pbInstance = new PocketBase(PB_URL);
         pbInstance.autoCancellation(false);
+        // Resilient fetch wrapper with retry and backoff for cloud/VPS network blips
+        pbInstance.beforeSend = (url, options) => {
+          options.fetch = async (reqUrl: any, reqOpts: any) => {
+            let lastError: any;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                const res = await fetch(reqUrl, reqOpts);
+                return res;
+              } catch (err: any) {
+                lastError = err;
+                if (attempt < 3) {
+                  await new Promise((r) => setTimeout(r, attempt * 250));
+                }
+              }
+            }
+            throw lastError;
+          };
+          return { url, options };
+        };
       }
 
       if (!pbInstance.authStore.isValid) {
