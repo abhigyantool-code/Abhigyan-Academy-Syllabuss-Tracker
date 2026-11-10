@@ -2,8 +2,8 @@ import PocketBase from 'pocketbase';
 
 const rawUrl = process.env.POCKETBASE_URL || 'https://stracker.abhigyanintelligence.cloud/_/';
 const PB_URL = rawUrl.replace(/\/_\/?$/, '').replace(/\/+$/, '');
-const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || '';
-const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD || '';
+const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'abhigyantool2@gmail.com';
+const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD || 'FfZjw97Mpp9gSwp@spb';
 
 let pbInstance: PocketBase | null = null;
 let authPromise: Promise<PocketBase> | null = null;
