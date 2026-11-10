@@ -19,7 +19,7 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-ENV DATABASE_URL="postgres://postgres:postgres@localhost:5432/syllabus_tracker"
+ENV POCKETBASE_URL="https://stracker.abhigyanintelligence.cloud/_/"
 ENV SESSION_SECRET="build-time-secret-key-must-be-at-least-32-chars-long"
 
 RUN npm run build

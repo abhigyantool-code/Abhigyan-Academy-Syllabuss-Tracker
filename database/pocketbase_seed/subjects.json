@@ -1,0 +1,590 @@
+[
+  {
+    "id": "0a175665-379e-40a1-b68b-765e2583eb65",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "id": "6bd29f85-f263-4404-beaa-f0d68519092d",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-10-24T08:20:45.011Z"
+  },
+  {
+    "id": "b55b807d-47e3-457e-9c40-f7430918b8a9",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "id": "0b3b9790-5bb7-4373-8b12-a7bb5f6770d7",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T09:20:02.400Z"
+  },
+  {
+    "id": "0a4a05bd-4b4b-4d86-aeb4-bb224baaa827",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "27c0fdf0-bdae-4ebe-bf95-69c24c3fefbf",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "607b7030-b40c-4679-beb7-2e75e9d23dcc",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "2c31c03e-133b-4893-b7ad-23958391635c",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "ca821a00-b270-4f44-bb14-906d795b1f47",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "ee3d6099-911f-4697-a1c2-a2b18fe2dbe5",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "d2e7b350-4ecf-4607-acd5-0626fcf5192c",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "33e66595-9958-4f01-acd4-4e74c90494af",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "11c78503-6e03-440a-9533-0c8314dd82c2",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "fb7009ce-347d-4ab5-a91d-c824e8b6a011",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "751ab330-68b6-4d4e-8c0b-87a9440d0119",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "56c7b3a0-63ba-44b2-8299-b8fd1937408f",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "46125bfc-662e-4cdb-a0ec-2f6f764809fe",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "4e322df8-635d-4eab-8706-467d5370c735",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "70ebeeb9-b739-403a-92b1-79d79fb54cde",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "9786e12d-8dd0-4c39-a9d9-ca3bdd196885",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "27cf93c2-66d5-4e9c-bce4-53273ff67de8",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "36d6788d-b94c-4b5b-a645-f19698c3c82d",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "379e4f08-e771-4f70-af62-c88f9f41ee14",
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-10-24T11:48:02.586Z"
+  },
+  {
+    "id": "7ed51c0f-bd27-4225-afaa-fb065936770a",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "a14f61d5-77cb-4157-9958-ffa1cc868287",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "8c8d5df5-c12e-46ff-93d3-aa86f6efd851",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "454faa19-553e-459f-b0d1-98934fcd305a",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "f317fb7f-e3f8-41ff-8ec5-27a5be46f8e1",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "4ca553d4-44be-4df8-81ac-e4f9ed85b6eb",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "d11f77e4-def7-48fe-85f1-18658601e639",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "c1760ab0-e213-46f4-8aa1-e97975bcef0b",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "f8e28246-5be5-447b-893e-2ec8c8d83f51",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "14b59cf3-ab5c-4f5a-a7b9-31c5b4dc5e3f",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "ca9a1488-6e39-4ff2-aa0b-7ccd4f31dcb0",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "fa3a4b2d-b04a-4843-8e49-80ee086b9de3",
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "3f2f67ec-7c7d-4965-9438-3a2375f77585",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "18a334e3-0b30-4e75-8e56-110683e99be2",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "6d800e12-c6ce-4f6e-9562-5f67a882f71d",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "5a1c1abf-f2d9-4116-bc35-0cd597280da5",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "1034bb79-93c3-46e2-a41f-80513e4b7d0b",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "2c0e52d7-2f02-4c4e-9fff-09811a25d914",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "e69cfb91-797f-4878-b976-edcf6ed552d9",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "c1e1a118-76d2-4403-9896-7a07b298657e",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "055a30e9-8235-413b-a1f9-4f1b5a39e40a",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "3ecae0ed-bc40-47e3-91d8-ba2903da30cb",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "1939c5a7-80f7-43bd-85ec-ebeabb4c2bbe",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "e799307c-1cfa-4cd7-b993-157804da2d79",
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "3fc84c73-583f-41ec-861d-25eed9023d9b",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "386d9c59-fc3d-4b92-88a5-e0a6858faf1f",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "aa0ae3d7-e6bd-46d0-a4f4-a72111c66c54",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "13c77c85-d560-4775-9b37-d97143382cbe",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "75e8bf3e-be66-427c-95a0-8f9616f114c0",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "5295955c-42eb-4f3e-88d0-8d29b02f36b3",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "afcaa86f-6bea-4afd-ab95-05f072f8efc1",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "b313dcd0-fbc7-40bc-bff3-5f1be197b358",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "5fb2334c-4151-48d5-ad85-5ec19069b359",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "3a24489c-d2a3-41a0-ba6d-0ab9809a8448",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "7f880931-a1f3-4806-aef5-61a115897dd6",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "c986e17f-fb12-4523-8fa6-1e5f219b749a",
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "3c2c2a3f-71aa-45d1-a3b2-cee48038e416",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "a79d6e73-675c-4374-8007-e13d1dffa262",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "9f07eaef-2752-4e0e-bcc4-126e2f52c2cc",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "83d5ed5e-7251-4f4b-8309-039871e01d9f",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "73ecb8d5-fa4b-4e70-955e-5e49e559133f",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "4cd84255-50eb-4f48-ae77-fa47bd8f1b8c",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "e8349e7a-e816-4144-a611-d7332bd9a0b8",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "2db504df-e864-45f7-b386-e17d20a724ca",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "c42d9384-2910-422f-9908-f80e448b0e0d",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "c6f91768-6b5e-4b3a-b73f-35ad89b105f5",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "fdca98d5-8ae8-4242-9227-f2a8727f609d",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "20ad20fd-416b-47c8-9679-dc0a54500312",
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "94d3a789-d680-498d-aef5-05fb1af4d9ce",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "a43f195b-fd15-4155-8e77-fe80e4a9f766",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Physics",
+    "sort_order": 2,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "636ee88b-da18-4eb6-9610-cfe648b8c624",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Chemistry",
+    "sort_order": 3,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "48cf5b74-6a36-40ef-ab40-b43e4efcb72f",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Biology",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "41f1a480-c709-40b9-a40b-737b095207ff",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "English",
+    "sort_order": 4,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "4370529a-0609-4661-a44e-643d9fc2b8ba",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Reasoning",
+    "sort_order": 6,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "8acae6af-e1c2-44f2-ab26-d919f275423b",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Current Affairs",
+    "sort_order": 7,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "ddf961f0-2251-445d-b324-41704eed0e43",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "History",
+    "sort_order": 8,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "d239b467-ac86-4b22-90d7-70684abb6c35",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Polity",
+    "sort_order": 9,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "d5a6b073-c2d1-4fa2-8bce-84a108ce9875",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "SSB Sessions",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "4d1300b1-57b6-4b0c-ac41-7cb3198f8511",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Economics",
+    "sort_order": 10,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "760a3b3e-2709-45c9-8705-1081f9ed6c01",
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Geography",
+    "sort_order": 11,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  },
+  {
+    "id": "b9e97456-8606-4841-a57a-6aae1bb13d8a",
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Mathematics",
+    "sort_order": 1,
+    "created_at": "2026-11-04T10:40:08.924Z"
+  }
+]

@@ -1,0 +1,394 @@
+[
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "70ebeeb9-b739-403a-92b1-79d79fb54cde"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "b55b807d-47e3-457e-9c40-f7430918b8a9"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "379e4f08-e771-4f70-af62-c88f9f41ee14"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "0a175665-379e-40a1-b68b-765e2583eb65"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "0b3b9790-5bb7-4373-8b12-a7bb5f6770d7"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "56c7b3a0-63ba-44b2-8299-b8fd1937408f"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "46125bfc-662e-4cdb-a0ec-2f6f764809fe"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "70ebeeb9-b739-403a-92b1-79d79fb54cde"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "36d6788d-b94c-4b5b-a645-f19698c3c82d"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "70ebeeb9-b739-403a-92b1-79d79fb54cde"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "6bd29f85-f263-4404-beaa-f0d68519092d"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "7ed51c0f-bd27-4225-afaa-fb065936770a"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "a14f61d5-77cb-4157-9958-ffa1cc868287"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "8c8d5df5-c12e-46ff-93d3-aa86f6efd851"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "454faa19-553e-459f-b0d1-98934fcd305a"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "f317fb7f-e3f8-41ff-8ec5-27a5be46f8e1"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "4ca553d4-44be-4df8-81ac-e4f9ed85b6eb"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "d11f77e4-def7-48fe-85f1-18658601e639"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "d11f77e4-def7-48fe-85f1-18658601e639"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "d11f77e4-def7-48fe-85f1-18658601e639"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "c1760ab0-e213-46f4-8aa1-e97975bcef0b"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "f8e28246-5be5-447b-893e-2ec8c8d83f51"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "14b59cf3-ab5c-4f5a-a7b9-31c5b4dc5e3f"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "9786e12d-8dd0-4c39-a9d9-ca3bdd196885"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "27cf93c2-66d5-4e9c-bce4-53273ff67de8"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "4e322df8-635d-4eab-8706-467d5370c735"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "ca9a1488-6e39-4ff2-aa0b-7ccd4f31dcb0"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "fa3a4b2d-b04a-4843-8e49-80ee086b9de3"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "3f2f67ec-7c7d-4965-9438-3a2375f77585"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "18a334e3-0b30-4e75-8e56-110683e99be2"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "6d800e12-c6ce-4f6e-9562-5f67a882f71d"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "5a1c1abf-f2d9-4116-bc35-0cd597280da5"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "1034bb79-93c3-46e2-a41f-80513e4b7d0b"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "2c0e52d7-2f02-4c4e-9fff-09811a25d914"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "e69cfb91-797f-4878-b976-edcf6ed552d9"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "e69cfb91-797f-4878-b976-edcf6ed552d9"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "e69cfb91-797f-4878-b976-edcf6ed552d9"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "c1e1a118-76d2-4403-9896-7a07b298657e"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "055a30e9-8235-413b-a1f9-4f1b5a39e40a"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "3ecae0ed-bc40-47e3-91d8-ba2903da30cb"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "1939c5a7-80f7-43bd-85ec-ebeabb4c2bbe"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "e799307c-1cfa-4cd7-b993-157804da2d79"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "3fc84c73-583f-41ec-861d-25eed9023d9b"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "386d9c59-fc3d-4b92-88a5-e0a6858faf1f"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "aa0ae3d7-e6bd-46d0-a4f4-a72111c66c54"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "13c77c85-d560-4775-9b37-d97143382cbe"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "75e8bf3e-be66-427c-95a0-8f9616f114c0"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "5295955c-42eb-4f3e-88d0-8d29b02f36b3"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "afcaa86f-6bea-4afd-ab95-05f072f8efc1"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "afcaa86f-6bea-4afd-ab95-05f072f8efc1"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "afcaa86f-6bea-4afd-ab95-05f072f8efc1"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "b313dcd0-fbc7-40bc-bff3-5f1be197b358"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "5fb2334c-4151-48d5-ad85-5ec19069b359"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "3a24489c-d2a3-41a0-ba6d-0ab9809a8448"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "7f880931-a1f3-4806-aef5-61a115897dd6"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "c986e17f-fb12-4523-8fa6-1e5f219b749a"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "3c2c2a3f-71aa-45d1-a3b2-cee48038e416"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "a79d6e73-675c-4374-8007-e13d1dffa262"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "9f07eaef-2752-4e0e-bcc4-126e2f52c2cc"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "83d5ed5e-7251-4f4b-8309-039871e01d9f"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "73ecb8d5-fa4b-4e70-955e-5e49e559133f"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "4cd84255-50eb-4f48-ae77-fa47bd8f1b8c"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "e8349e7a-e816-4144-a611-d7332bd9a0b8"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "e8349e7a-e816-4144-a611-d7332bd9a0b8"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "e8349e7a-e816-4144-a611-d7332bd9a0b8"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "2db504df-e864-45f7-b386-e17d20a724ca"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "c42d9384-2910-422f-9908-f80e448b0e0d"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "c6f91768-6b5e-4b3a-b73f-35ad89b105f5"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "fdca98d5-8ae8-4242-9227-f2a8727f609d"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "20ad20fd-416b-47c8-9679-dc0a54500312"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "94d3a789-d680-498d-aef5-05fb1af4d9ce"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "a43f195b-fd15-4155-8e77-fe80e4a9f766"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "636ee88b-da18-4eb6-9610-cfe648b8c624"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "48cf5b74-6a36-40ef-ab40-b43e4efcb72f"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "41f1a480-c709-40b9-a40b-737b095207ff"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "4370529a-0609-4661-a44e-643d9fc2b8ba"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "8acae6af-e1c2-44f2-ab26-d919f275423b"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "8acae6af-e1c2-44f2-ab26-d919f275423b"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "8acae6af-e1c2-44f2-ab26-d919f275423b"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "ddf961f0-2251-445d-b324-41704eed0e43"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "d239b467-ac86-4b22-90d7-70684abb6c35"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "d5a6b073-c2d1-4fa2-8bce-84a108ce9875"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "4d1300b1-57b6-4b0c-ac41-7cb3198f8511"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "760a3b3e-2709-45c9-8705-1081f9ed6c01"
+  },
+  {
+    "teacher_id": "16850f0d-d1e6-4e8e-9e93-44e0559b288a",
+    "subject_id": "b9e97456-8606-4841-a57a-6aae1bb13d8a"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "0a4a05bd-4b4b-4d86-aeb4-bb224baaa827"
+  },
+  {
+    "teacher_id": "635ede62-1c14-4a0c-8479-c0663f92a675",
+    "subject_id": "27c0fdf0-bdae-4ebe-bf95-69c24c3fefbf"
+  },
+  {
+    "teacher_id": "e6acf08f-e058-486e-bcf0-2aa9fe86f75f",
+    "subject_id": "607b7030-b40c-4679-beb7-2e75e9d23dcc"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "2c31c03e-133b-4893-b7ad-23958391635c"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "ca821a00-b270-4f44-bb14-906d795b1f47"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "ee3d6099-911f-4697-a1c2-a2b18fe2dbe5"
+  },
+  {
+    "teacher_id": "3600c149-fc58-495b-a924-c63c990bb9b3",
+    "subject_id": "ee3d6099-911f-4697-a1c2-a2b18fe2dbe5"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "ee3d6099-911f-4697-a1c2-a2b18fe2dbe5"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "d2e7b350-4ecf-4607-acd5-0626fcf5192c"
+  },
+  {
+    "teacher_id": "2b7bdd69-d56e-4ad8-8a44-62c37f1fa8ac",
+    "subject_id": "33e66595-9958-4f01-acd4-4e74c90494af"
+  },
+  {
+    "teacher_id": "15f74ec0-1b09-405e-ac2f-eef709a9c4aa",
+    "subject_id": "11c78503-6e03-440a-9533-0c8314dd82c2"
+  },
+  {
+    "teacher_id": "8309c6ec-d65a-49a6-b148-4011b5bc19e0",
+    "subject_id": "fb7009ce-347d-4ab5-a91d-c824e8b6a011"
+  },
+  {
+    "teacher_id": "4049b788-103c-4f13-8851-81b812883a72",
+    "subject_id": "751ab330-68b6-4d4e-8c0b-87a9440d0119"
+  }
+]

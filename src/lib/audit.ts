@@ -1,4 +1,4 @@
-import { query } from './db';
+import { getPbClient } from './pb';
 
 export interface AuditParams {
   actorLabel?: string;
@@ -10,7 +10,7 @@ export interface AuditParams {
 }
 
 export async function logAudit({
-  actorLabel = 'Admin (Phase 1)',
+  actorLabel = 'Admin',
   action,
   entity,
   entityId = null,
@@ -18,19 +18,16 @@ export async function logAudit({
   after = null,
 }: AuditParams) {
   try {
-    await query(
-      `INSERT INTO audit_log (actor_label, action, entity, entity_id, before, after)
-       VALUES ($1, $2, $3, $4, $5, $6);`,
-      [
-        actorLabel,
-        action,
-        entity,
-        entityId,
-        before ? JSON.stringify(before) : null,
-        after ? JSON.stringify(after) : null,
-      ]
-    );
+    const pb = await getPbClient();
+    await pb.collection('audit_log').create({
+      actor_label: actorLabel,
+      action,
+      entity,
+      entity_id: entityId || '',
+      before: before || null,
+      after: after || null,
+    });
   } catch (error) {
-    console.error('Failed to write audit log:', error);
+    console.error('Failed to write audit log to PocketBase:', error);
   }
 }

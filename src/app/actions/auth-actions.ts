@@ -1,6 +1,6 @@
 'use server';
 
-import { query } from '@/lib/db';
+import { getPbClient } from '@/lib/pb';
 import { createSession, destroySession, getSession } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
 import { getTodayIST } from '@/lib/date-utils';
@@ -12,16 +12,15 @@ export async function teacherLoginAction(teacherId: string, pin: string) {
     throw new Error('Please select your faculty profile and enter your PIN.');
   }
 
-  const res = await query(
-    `SELECT id, name, pin, active FROM teachers WHERE id = $1 LIMIT 1;`,
-    [teacherId]
-  );
+  const pb = await getPbClient();
 
-  if (res.rows.length === 0) {
+  let teacher: any;
+  try {
+    teacher = await pb.collection('teachers').getOne(teacherId);
+  } catch {
     throw new Error('Teacher record not found.');
   }
 
-  const teacher = res.rows[0];
   if (!teacher.active) {
     throw new Error('This faculty account is deactivated. Please contact the administrator.');
   }
@@ -99,48 +98,48 @@ export async function teacherEndorseTopicAction(topicId: string, subjectId: stri
 
   const teacherId = session.teacherId;
   const today = getTodayIST();
+  const pb = await getPbClient();
 
   // 1. Verify this teacher teaches this subject
-  const match = await query(
-    `SELECT 1 FROM teacher_subjects WHERE teacher_id = $1 AND subject_id = $2;`,
-    [teacherId, subjectId]
-  );
-  if (match.rows.length === 0) {
+  try {
+    await pb.collection('teacher_subjects').getFirstListItem(`teacher="${teacherId}" && subject="${subjectId}"`);
+  } catch {
     throw new Error('You are not assigned to teach this subject.');
   }
 
-  // 2. Approve all pending student submissions for this topic
-  const updateRes = await query(
-    `UPDATE entries 
-     SET review_status = 'approved', status = 'covered'
-     WHERE topic_id = $1 AND teacher_id = $2
-     RETURNING id;`,
-    [topicId, teacherId]
-  );
+  // 2. Find pending student submissions for this topic and approve them
+  const existingEntries = await pb.collection('entries').getFullList({
+    filter: `topic="${topicId}" && teacher="${teacherId}"`,
+  });
 
-  // 3. If no student submissions exist yet today, create a teacher-endorsed entry
-  if (updateRes.rows.length === 0) {
-    // Pick first enrolled student in course to anchor entry
-    const stuRes = await query(
-      `SELECT s.id FROM students s JOIN enrollments e ON s.id = e.student_id WHERE e.course_id = $1 LIMIT 1;`,
-      [courseId]
-    );
-    if (stuRes.rows.length > 0) {
-      await query(
-        `INSERT INTO entries (student_id, course_id, subject_id, teacher_id, topic_id, class_date, remarks, status, device_id, review_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'covered', 'teacher-portal-endorse', 'approved')
-         ON CONFLICT (student_id, topic_id, class_date) 
-         DO UPDATE SET status = 'covered', review_status = 'approved', remarks = EXCLUDED.remarks;`,
-        [
-          stuRes.rows[0].id,
-          courseId,
-          subjectId,
-          teacherId,
-          topicId,
-          today,
-          remarks ? `[Faculty Endorsed] ${remarks}` : '[Faculty Endorsed directly from Teacher Portal]',
-        ]
-      );
+  if (existingEntries.length > 0) {
+    for (const ent of existingEntries) {
+      await pb.collection('entries').update(ent.id, {
+        review_status: 'approved',
+        status: 'covered',
+      });
+    }
+  } else {
+    // 3. If no student submissions exist, create teacher-endorsed entry anchored by first enrolled student
+    const enrollments = await pb.collection('enrollments').getList(1, 1, {
+      filter: `course="${courseId}"`,
+    });
+
+    if (enrollments.items.length > 0) {
+      const studentId = enrollments.items[0].student;
+      await pb.collection('entries').create({
+        student: studentId,
+        course: courseId,
+        subject: subjectId,
+        teacher: teacherId,
+        topic: topicId,
+        class_date: today,
+        status: 'covered',
+        review_status: 'approved',
+        device_id: 'teacher-portal-endorse',
+        flags: [],
+        remarks: remarks ? `[Faculty Endorsed] ${remarks}` : '[Faculty Endorsed directly from Teacher Portal]',
+      });
     }
   }
 
@@ -165,23 +164,24 @@ export async function changeStudentPinAction(studentIdentifier: string, currentP
     throw new Error('New PIN must be 4–8 numeric digits.');
   }
 
-  // Support lookup by UUID or by roll_no / serial number (e.g. NDA-01)
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(studentIdentifier);
-  const res = isUuid
-    ? await query(`SELECT id, pin FROM students WHERE id = $1 LIMIT 1`, [studentIdentifier])
-    : await query(`SELECT id, pin FROM students WHERE roll_no = $1 OR id::text = $1 LIMIT 1`, [studentIdentifier]);
+  const pb = await getPbClient();
 
-  if (res.rows.length === 0) {
-    throw new Error('Student not found.');
+  let student: any;
+  try {
+    student = await pb.collection('students').getOne(studentIdentifier);
+  } catch {
+    try {
+      student = await pb.collection('students').getFirstListItem(`roll_no="${studentIdentifier}"`);
+    } catch {
+      throw new Error('Student not found.');
+    }
   }
-
-  const student = res.rows[0];
 
   if (student.pin !== currentPin.trim()) {
     throw new Error('Current PIN is incorrect.');
   }
 
-  await query(`UPDATE students SET pin = $1 WHERE id = $2`, [newPin.trim(), student.id]);
+  await pb.collection('students').update(student.id, { pin: newPin.trim() });
 
   await logAudit({
     action: 'STUDENT_CHANGE_PIN',
@@ -206,12 +206,13 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
     throw new Error('New PIN must be at least 4 digits.');
   }
 
-  const teacherRes = await query(`SELECT pin FROM teachers WHERE id = $1`, [session.teacherId]);
-  if (teacherRes.rows[0]?.pin !== oldPin.trim()) {
+  const pb = await getPbClient();
+  const teacher = await pb.collection('teachers').getOne(session.teacherId);
+  if (teacher.pin !== oldPin.trim()) {
     throw new Error('Old PIN is incorrect.');
   }
 
-  await query(`UPDATE teachers SET pin = $1 WHERE id = $2`, [newPin.trim(), session.teacherId]);
+  await pb.collection('teachers').update(session.teacherId, { pin: newPin.trim() });
 
   await logAudit({
     action: 'UPDATE_TEACHER_PIN',

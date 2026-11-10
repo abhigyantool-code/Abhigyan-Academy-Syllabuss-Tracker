@@ -1,12 +1,14 @@
 import { z } from 'zod';
-import { query } from './db';
+import { getPbClient } from './pb';
+
+const idRegex = /^[a-z0-9]{15}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const submitEntrySchema = z.object({
-  courseId: z.string().uuid('Invalid course selected'),
-  teacherId: z.string().uuid('Please select a faculty member'),
-  subjectId: z.string().uuid('Please select a subject'),
-  topicId: z.string().uuid('Please select a curriculum topic'),
-  studentId: z.string().uuid('Please select your roll number / name'),
+  courseId: z.string().regex(idRegex, 'Invalid course selected'),
+  teacherId: z.string().regex(idRegex, 'Please select a faculty member'),
+  subjectId: z.string().regex(idRegex, 'Please select a subject'),
+  topicId: z.string().regex(idRegex, 'Please select a curriculum topic'),
+  studentId: z.string().regex(idRegex, 'Please select your roll number / name'),
   pin: z
     .string()
     .min(4, 'Student PIN must be at least 4 digits')
@@ -30,7 +32,7 @@ export interface MisuseAnalysisResult {
 }
 
 /**
- * Evaluates entry for suspicious activity:
+ * Evaluates entry for suspicious activity using PocketBase:
  * - Sequence jump (> 3 topics ahead of lowest uncovered topic)
  * - Rapid submission burst (multiple entries in seconds)
  * - Device submitting for multiple distinct students within 24 hours
@@ -46,53 +48,50 @@ export async function analyzeMisuseFlags(params: {
   const { subjectId, topicId, studentId, deviceId } = params;
 
   try {
+    const pb = await getPbClient();
+
     // 1. Sequence Jump Check
-    const [currentTopicRes, uncoveredRes] = await Promise.all([
-      query(`SELECT seq_no FROM topics WHERE id = $1`, [topicId]),
-      query(
-        `SELECT MIN(t.seq_no) as lowest_uncovered_seq
-         FROM topics t
-         LEFT JOIN topic_progress tp ON tp.topic_id = t.id
-         WHERE t.subject_id = $1 AND COALESCE(tp.status, 'not_started') NOT IN ('covered')`,
-        [subjectId]
-      ),
+    const [currentTopic, allSubjectTopics, coveredEntries] = await Promise.all([
+      pb.collection('topics').getOne(topicId),
+      pb.collection('topics').getFullList({ filter: `subject = "${subjectId}"`, sort: 'seq_no' }),
+      pb.collection('entries').getFullList({
+        filter: `subject = "${subjectId}" && status = "covered" && review_status = "approved"`,
+        fields: 'topic',
+      }),
     ]);
 
-    const currentSeq = Number(currentTopicRes.rows[0]?.seq_no || 1);
-    const lowestUncovered = Number(uncoveredRes.rows[0]?.lowest_uncovered_seq || 1);
+    const coveredTopicIds = new Set(coveredEntries.map((e) => e.topic));
+    const lowestUncoveredTopic = allSubjectTopics.find((t) => !coveredTopicIds.has(t.id));
+    const lowestUncoveredSeq = lowestUncoveredTopic ? lowestUncoveredTopic.seq_no : 1;
+    const currentSeq = currentTopic.seq_no || 1;
 
-    if (currentSeq - lowestUncovered > 3) {
+    if (currentSeq - lowestUncoveredSeq > 3) {
       flags.push('FLAG_SEQUENCE_JUMP');
     }
 
     // 2. Rapid Burst Check (Same student or device within past 30 seconds)
-    const burstRes = await query(
-      `SELECT COUNT(*) as count 
-       FROM entries 
-       WHERE (student_id = $1 OR device_id = $2) 
-         AND created_at >= now() - interval '30 seconds'`,
-      [studentId, deviceId]
-    );
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString().replace('T', ' ');
+    const burstEntries = await pb.collection('entries').getList(1, 10, {
+      filter: `(student = "${studentId}" || device_id = "${deviceId}") && created >= "${thirtySecondsAgo}"`,
+    });
 
-    if (Number(burstRes.rows[0]?.count || 0) >= 2) {
+    if (burstEntries.totalItems >= 2) {
       flags.push('FLAG_BURST_RATE');
     }
 
     // 3. Multi-Student Device Reuse (Same device logged for > 2 different students in 24 hours)
-    const multiStudentRes = await query(
-      `SELECT COUNT(DISTINCT student_id) as count 
-       FROM entries 
-       WHERE device_id = $1 
-         AND created_at >= now() - interval '24 hours' 
-         AND student_id != $2`,
-      [deviceId, studentId]
-    );
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace('T', ' ');
+    const deviceEntries = await pb.collection('entries').getFullList({
+      filter: `device_id = "${deviceId}" && student != "${studentId}" && created >= "${twentyFourHoursAgo}"`,
+      fields: 'student',
+    });
 
-    if (Number(multiStudentRes.rows[0]?.count || 0) >= 2) {
+    const distinctStudents = new Set(deviceEntries.map((e) => e.student));
+    if (distinctStudents.size >= 2) {
       flags.push('FLAG_MULTI_STUDENT_DEVICE');
     }
   } catch (error) {
-    console.error('Error analyzing misuse flags:', error);
+    console.error('Error analyzing misuse flags in PocketBase:', error);
   }
 
   return {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { getPbClient } from '@/lib/pb';
 import { requireAccess } from '@/lib/auth-guard';
+import { getDashboardData, getActiveCourses } from '@/lib/dashboard-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,52 +27,20 @@ export async function GET(request: NextRequest) {
 
   // 'all' means no course filter — export everything
   const isAllCourses = !courseId || courseId === 'all';
+  const pb = await getPbClient();
 
   if (type === 'entries') {
-    const conditions: string[] = [];
-    const params: any[] = [];
-    let pIdx = 1;
+    const filters: string[] = [];
+    if (!isAllCourses) filters.push(`course = "${courseId}"`);
+    if (subjectId && subjectId !== 'all') filters.push(`subject = "${subjectId}"`);
+    if (startDate) filters.push(`class_date >= "${startDate}"`);
+    if (endDate) filters.push(`class_date <= "${endDate}"`);
 
-    if (!isAllCourses) {
-      conditions.push(`e.course_id = $${pIdx++}`);
-      params.push(courseId);
-    }
-    if (subjectId && subjectId !== 'all') {
-      conditions.push(`e.subject_id = $${pIdx++}`);
-      params.push(subjectId);
-    }
-    if (startDate) {
-      conditions.push(`e.class_date >= $${pIdx++}`);
-      params.push(startDate);
-    }
-    if (endDate) {
-      conditions.push(`e.class_date <= $${pIdx++}`);
-      params.push(endDate);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const res = await query(
-      `SELECT e.id, e.class_date::text, c.name as course_name, s.name as subject_name,
-              t.seq_no, t.name as topic_name, tea.name as teacher_name,
-              stu.roll_no, stu.name as student_name, e.status, e.remarks,
-              e.review_status, e.flags, e.created_at::text,
-              CASE 
-                WHEN e.device_id = 'teacher-portal-endorse' THEN 'Endorsed (Direct)'
-                WHEN e.review_status IN ('approved', 'CLEARED') THEN 'Endorsed'
-                WHEN e.review_status IN ('rejected', 'VIOLATION') THEN 'Rejected'
-                ELSE 'Pending Endorsement'
-              END as endorsement_status
-       FROM entries e
-       JOIN courses c ON c.id = e.course_id
-       JOIN subjects s ON s.id = e.subject_id
-       JOIN topics t ON t.id = e.topic_id
-       JOIN teachers tea ON tea.id = e.teacher_id
-       JOIN students stu ON stu.id = e.student_id
-       ${whereClause}
-       ORDER BY e.created_at DESC`,
-      params
-    );
+    const entries = await pb.collection('entries').getFullList({
+      filter: filters.length > 0 ? filters.join(' && ') : undefined,
+      sort: '-created',
+      expand: 'course,subject,topic,teacher,student',
+    });
 
     const headers = [
       'Reference ID',
@@ -91,27 +60,42 @@ export async function GET(request: NextRequest) {
       'Logged At (UTC)',
     ];
 
-    const rows = res.rows.map((r) =>
-      [
+    const rows = entries.map((r) => {
+      const course = (r.expand as any)?.course;
+      const subject = (r.expand as any)?.subject;
+      const topic = (r.expand as any)?.topic;
+      const teacher = (r.expand as any)?.teacher;
+      const student = (r.expand as any)?.student;
+
+      let endorsementStatus = 'Pending Endorsement';
+      if (r.device_id === 'teacher-portal-endorse') {
+        endorsementStatus = 'Endorsed (Direct)';
+      } else if (r.review_status === 'approved' || r.review_status === 'CLEARED') {
+        endorsementStatus = 'Endorsed';
+      } else if (r.review_status === 'rejected' || r.review_status === 'VIOLATION') {
+        endorsementStatus = 'Rejected';
+      }
+
+      return [
         r.id,
         r.class_date,
-        r.course_name,
-        r.subject_name,
-        r.seq_no,
-        r.topic_name,
-        r.teacher_name,
-        r.roll_no,
-        r.student_name,
+        course?.name || 'Unknown',
+        subject?.name || 'Unknown',
+        topic?.seq_no || '',
+        topic?.name || 'Unknown',
+        teacher?.name || 'Unknown',
+        student?.roll_no || '',
+        student?.name || 'Unknown',
         r.status,
         r.remarks || '',
         r.review_status,
-        r.endorsement_status,
+        endorsementStatus,
         JSON.stringify(r.flags || []),
-        r.created_at,
+        r.created,
       ]
         .map(escapeCsv)
-        .join(',')
-    );
+        .join(',');
+    });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
     return new NextResponse(csvContent, {
@@ -122,35 +106,22 @@ export async function GET(request: NextRequest) {
       },
     });
   } else if (type === 'progress') {
-    const res = isAllCourses
-      ? await query(
-          `SELECT tp.course_name, tp.subject_name, tp.seq_no, tp.topic_name,
-                  tp.target_date::text, tp.status, tp.covered_confirmations,
-                  tp.effective_threshold, tp.first_date_taught::text, tp.last_date_taught::text,
-                  COALESCE(STRING_AGG(DISTINCT tea.name, '; '), 'Unassigned') as teachers
-           FROM topic_progress tp
-           LEFT JOIN teacher_subjects ts ON ts.subject_id = tp.subject_id
-           LEFT JOIN teachers tea ON tea.id = ts.teacher_id
-           GROUP BY tp.topic_id, tp.course_name, tp.subject_name, tp.seq_no, tp.topic_name,
-                    tp.target_date, tp.status, tp.covered_confirmations,
-                    tp.effective_threshold, tp.first_date_taught, tp.last_date_taught
-           ORDER BY tp.course_name ASC, tp.subject_name ASC, tp.seq_no ASC`
-        )
-      : await query(
-          `SELECT tp.course_name, tp.subject_name, tp.seq_no, tp.topic_name,
-                  tp.target_date::text, tp.status, tp.covered_confirmations,
-                  tp.effective_threshold, tp.first_date_taught::text, tp.last_date_taught::text,
-                  COALESCE(STRING_AGG(DISTINCT tea.name, '; '), 'Unassigned') as teachers
-           FROM topic_progress tp
-           LEFT JOIN teacher_subjects ts ON ts.subject_id = tp.subject_id
-           LEFT JOIN teachers tea ON tea.id = ts.teacher_id
-           WHERE tp.course_id = $1
-           GROUP BY tp.topic_id, tp.course_name, tp.subject_name, tp.seq_no, tp.topic_name,
-                    tp.target_date, tp.status, tp.covered_confirmations,
-                    tp.effective_threshold, tp.first_date_taught, tp.last_date_taught
-           ORDER BY tp.subject_name ASC, tp.seq_no ASC`,
-          [courseId]
-        );
+    let allTopicProgress: any[] = [];
+
+    if (isAllCourses) {
+      const allCourses = await getActiveCourses();
+      for (const c of allCourses) {
+        const dData = await getDashboardData(c.id);
+        if (dData?.topicProgress) {
+          allTopicProgress.push(...dData.topicProgress);
+        }
+      }
+    } else {
+      const dData = await getDashboardData(courseId);
+      if (dData?.topicProgress) {
+        allTopicProgress = dData.topicProgress;
+      }
+    }
 
     const headers = [
       'Course',
@@ -166,7 +137,7 @@ export async function GET(request: NextRequest) {
       'Faculty',
     ];
 
-    const rows = res.rows.map((r) =>
+    const rows = allTopicProgress.map((r) =>
       [
         r.course_name,
         r.subject_name,
@@ -178,7 +149,7 @@ export async function GET(request: NextRequest) {
         r.effective_threshold,
         r.first_date_taught || '',
         r.last_date_taught || '',
-        r.teachers,
+        r.teacher_names || 'Unassigned',
       ]
         .map(escapeCsv)
         .join(',')

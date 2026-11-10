@@ -1,4 +1,4 @@
-import { query } from './db';
+import { getPbClient } from './pb';
 
 export interface VerifyStudentResult {
   valid: boolean;
@@ -12,7 +12,7 @@ export interface VerifyStudentResult {
 }
 
 /**
- * Verifies student existence, active status, course enrollment, and 4-digit PIN.
+ * Verifies student existence, active status, course enrollment, and 4-digit PIN using PocketBase.
  * Default PIN for all students is '1234'.
  */
 export async function verifyStudent(
@@ -21,17 +21,15 @@ export async function verifyStudent(
   pin?: string
 ): Promise<VerifyStudentResult> {
   try {
-    // 1. Check student exists and is active
-    const studentRes = await query(
-      `SELECT id, roll_no, name, active, pin FROM students WHERE id = $1`,
-      [studentId]
-    );
+    const pb = await getPbClient();
 
-    if (studentRes.rows.length === 0) {
+    // 1. Fetch student
+    let student: any;
+    try {
+      student = await pb.collection('students').getOne(studentId);
+    } catch {
       return { valid: false, error: 'Student not found in academy records.' };
     }
-
-    const student = studentRes.rows[0];
 
     if (!student.active) {
       return {
@@ -41,12 +39,9 @@ export async function verifyStudent(
     }
 
     // 2. Check enrollment in course
-    const enrollRes = await query(
-      `SELECT course_id FROM enrollments WHERE student_id = $1 AND course_id = $2`,
-      [studentId, courseId]
-    );
-
-    if (enrollRes.rows.length === 0) {
+    try {
+      await pb.collection('enrollments').getFirstListItem(`student="${studentId}" && course="${courseId}"`);
+    } catch {
       return {
         valid: false,
         error: `Student ${student.name} (${student.roll_no}) is not enrolled in this course.`,
@@ -70,8 +65,11 @@ export async function verifyStudent(
         active: student.active,
       },
     };
-  } catch (err: any) {
-    console.error('verifyStudent error:', err);
-    return { valid: false, error: 'Internal verification error.' };
+  } catch (error: any) {
+    console.error('Error verifying student in PocketBase:', error);
+    return {
+      valid: false,
+      error: 'An internal error occurred during student validation. Please try again.',
+    };
   }
 }

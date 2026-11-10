@@ -1,17 +1,25 @@
 import { test, expect } from '@playwright/test';
-import { query } from '../../lib/db';
+import { getPbClient } from '../../lib/pb';
 import { getTodayIST } from '../../lib/date-utils';
 
 test.describe('Abhigyan Academy Student Submission Portal', () => {
   test.beforeEach(async () => {
     // Clean any prior submissions from test student ABG-2026-007 for today to ensure test idempotency
-    const today = getTodayIST();
-    await query(
-      `DELETE FROM entries 
-       WHERE student_id IN (SELECT id FROM students WHERE roll_no = 'ABG-2026-007') 
-         AND class_date = $1`,
-      [today]
-    );
+    try {
+      const today = getTodayIST();
+      const pb = await getPbClient();
+      const student = await pb.collection('students').getFirstListItem('roll_no = "ABG-2026-007"');
+      if (student) {
+        const entries = await pb.collection('entries').getFullList({
+          filter: `student = "${student.id}" && class_date = "${today}"`,
+        });
+        for (const entry of entries) {
+          await pb.collection('entries').delete(entry.id);
+        }
+      }
+    } catch (err) {
+      // Ignore if test database is not seeded or unreachable
+    }
   });
 
   test('should render the student submit form with active course tabs', async ({ page }) => {

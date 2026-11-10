@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { query } from '@/lib/db';
+import { getPbClient } from '@/lib/pb';
 import { getTodayIST, formatISTDate } from '@/lib/date-utils';
 import { BookOpen, GraduationCap, LayoutDashboard, Shield, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
@@ -13,12 +13,15 @@ export default async function Home() {
   let teacherCount = 0;
 
   try {
-    const resCourses = await query('SELECT count(*) as count FROM courses WHERE active = true');
-    const resStudents = await query('SELECT count(*) as count FROM students WHERE active = true');
-    const resTeachers = await query('SELECT count(*) as count FROM teachers WHERE active = true');
-    courseCount = Number(resCourses.rows[0]?.count || 0);
-    studentCount = Number(resStudents.rows[0]?.count || 0);
-    teacherCount = Number(resTeachers.rows[0]?.count || 0);
+    const pb = await getPbClient();
+    const [resCourses, resStudents, resTeachers] = await Promise.all([
+      pb.collection('courses').getList(1, 1, { filter: 'active = true' }),
+      pb.collection('students').getList(1, 1, { filter: 'active = true' }),
+      pb.collection('teachers').getList(1, 1, { filter: 'active = true' }),
+    ]);
+    courseCount = resCourses.totalItems;
+    studentCount = resStudents.totalItems;
+    teacherCount = resTeachers.totalItems;
   } catch (err) {
     dbStatus = 'error';
     console.error('Home page DB error:', err);
@@ -125,7 +128,7 @@ export default async function Home() {
         <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-            <span>Database: <strong className="text-slate-200">PostgreSQL (Supabase RLS Enabled)</strong></span>
+            <span>Database: <strong className="text-slate-200">PocketBase (Self-Hosted Cloud)</strong></span>
           </div>
           <div className="flex items-center gap-6">
             <span>Active Courses: <strong className="text-slate-200">{courseCount}</strong></span>
@@ -136,7 +139,7 @@ export default async function Home() {
       </main>
 
       <footer className="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-        Abhigyan Academy Syllabus Tracker &bull; Phase 1 (No Authentication) &bull; Built with Next.js App Router, PostgreSQL, Tailwind & shadcn
+        Abhigyan Academy Syllabus Tracker &bull; Phase 1 (No Authentication) &bull; Built with Next.js App Router, PocketBase, Tailwind & shadcn
       </footer>
     </div>
   );

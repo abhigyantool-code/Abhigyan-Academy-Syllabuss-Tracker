@@ -1,5 +1,6 @@
-import { query } from './db';
+import { getPbClient } from './pb';
 import { getTodayIST } from './date-utils';
+import { computeEffectiveThreshold, determineTopicStatus } from './coverage-calculator';
 
 export interface DashboardCourse {
   id: string;
@@ -78,16 +79,23 @@ export interface RecentEntryItem {
   class_date: string;
   status: 'covered' | 'partial' | 'revision';
   remarks: string | null;
-  review_status: 'auto' | 'pending' | 'approved' | 'rejected';
+  review_status: 'auto' | 'pending' | 'approved' | 'rejected' | 'CLEARED' | 'VIOLATION' | 'FLAGGED';
   flags: string[];
   created_at: string;
 }
 
 export async function getActiveCourses(): Promise<DashboardCourse[]> {
-  const res = await query<DashboardCourse>(
-    `SELECT id, name, code, sort_order FROM courses WHERE active = true ORDER BY sort_order ASC, name ASC`
-  );
-  return res.rows;
+  const pb = await getPbClient();
+  const list = await pb.collection('courses').getFullList({
+    filter: 'active = true',
+    sort: 'sort_order',
+  });
+  return list.map((c) => ({
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    sort_order: c.sort_order || 0,
+  }));
 }
 
 export async function getDashboardData(courseId?: string) {
@@ -99,67 +107,175 @@ export async function getDashboardData(courseId?: string) {
   const selectedCourse = courses.find((c) => c.id === courseId) || courses[0];
   const cId = selectedCourse.id;
   const today = getTodayIST();
+  const pb = await getPbClient();
 
   // 1. Settings & Enrollment Count
-  const [settingsRes, enrollRes, pendingFlagsRes] = await Promise.all([
-    query(
-      `SELECT confirmation_threshold, daily_entry_cap, code_ttl_minutes, require_class_code 
-       FROM course_settings WHERE course_id = $1`,
-      [cId]
-    ),
-    query(
-      `SELECT COUNT(DISTINCT e.student_id) as enrolled_count
-       FROM enrollments e
-       JOIN students s ON s.id = e.student_id AND s.active = true
-       WHERE e.course_id = $1`,
-      [cId]
-    ),
-    query(
-      `SELECT COUNT(*) as count 
-       FROM entries 
-       WHERE course_id = $1 AND review_status = 'pending'`,
-      [cId]
-    ),
+  const [settingsList, enrollments, pendingEntriesRes] = await Promise.all([
+    pb.collection('course_settings').getFullList({ filter: `course = "${cId}"` }),
+    pb.collection('enrollments').getFullList({ filter: `course = "${cId}"`, expand: 'student' }),
+    pb.collection('entries').getList(1, 1, { filter: `course = "${cId}" && review_status = "pending"` }),
   ]);
 
-  const enrolledCount = Number(enrollRes.rows[0]?.enrolled_count || 0);
-  const pendingReviewCount = Number(pendingFlagsRes.rows[0]?.count || 0);
-  const threshold = Number(settingsRes.rows[0]?.confirmation_threshold || 5);
+  const activeEnrolledStudents = enrollments.filter((e) => (e.expand as any)?.student?.active).length;
+  const enrolledCount = activeEnrolledStudents || enrollments.length;
+  const pendingReviewCount = pendingEntriesRes.totalItems;
+  const configuredThreshold = settingsList[0]?.confirmation_threshold || 5;
+  const effectiveThreshold = computeEffectiveThreshold(configuredThreshold, enrolledCount);
 
-  // 2. Subject Progress
-  const subProgRes = await query<SubjectProgressItem>(
-    `SELECT subject_id, course_id, subject_name, 
-            total_topics::int, planned_topics::int, covered_topics::int, 
-            planned_pct::float, actual_pct::float, variance_pct::float
-     FROM subject_progress
-     WHERE course_id = $1
-     ORDER BY subject_name ASC`,
-    [cId]
+  // 2. Fetch Subjects & Topics for this course
+  const [subjects, topics, courseEntries, teacherSubjects] = await Promise.all([
+    pb.collection('subjects').getFullList({ filter: `course = "${cId}"`, sort: 'sort_order' }),
+    pb.collection('topics').getFullList({
+      filter: `subject.course = "${cId}"`,
+      sort: 'seq_no',
+    }),
+    pb.collection('entries').getFullList({
+      filter: `course = "${cId}" && review_status != "rejected" && review_status != "VIOLATION"`,
+    }),
+    pb.collection('teacher_subjects').getFullList({
+      filter: `subject.course = "${cId}"`,
+      expand: 'teacher',
+    }),
+  ]);
+
+  // Subject ID to Name map
+  const subjectNameMap = new Map(subjects.map((s) => [s.id, s.name]));
+
+  // Subject to Teacher Names map
+  const subjectTeachersMap = new Map<string, Set<string>>();
+  for (const ts of teacherSubjects) {
+    const teacherName = (ts.expand as any)?.teacher?.name;
+    if (teacherName) {
+      if (!subjectTeachersMap.has(ts.subject)) {
+        subjectTeachersMap.set(ts.subject, new Set());
+      }
+      subjectTeachersMap.get(ts.subject)!.add(teacherName);
+    }
+  }
+
+  // Topic ID to stats map
+  const topicStatsMap = new Map<
+    string,
+    {
+      covered: Set<string>;
+      partial: Set<string>;
+      approved: boolean;
+      firstDate: string | null;
+      lastDate: string | null;
+    }
+  >();
+
+  for (const ent of courseEntries) {
+    if (!topicStatsMap.has(ent.topic)) {
+      topicStatsMap.set(ent.topic, {
+        covered: new Set(),
+        partial: new Set(),
+        approved: false,
+        firstDate: null,
+        lastDate: null,
+      });
+    }
+    const stat = topicStatsMap.get(ent.topic)!;
+    if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
+      stat.covered.add(ent.student);
+    }
+    if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
+      stat.partial.add(ent.student);
+    }
+    if (ent.review_status === 'approved' && ent.status === 'covered') {
+      stat.approved = true;
+    }
+
+    if (ent.class_date) {
+      if (!stat.firstDate || ent.class_date < stat.firstDate) stat.firstDate = ent.class_date;
+      if (!stat.lastDate || ent.class_date > stat.lastDate) stat.lastDate = ent.class_date;
+    }
+  }
+
+  // Build Topic Progress
+  const topicProgress: TopicProgressItem[] = topics.map((t) => {
+    const stat = topicStatsMap.get(t.id);
+    const coveredConfirmations = stat?.covered.size || 0;
+    const partialConfirmations = stat?.partial.size || 0;
+    const targetDate = t.target_date ? t.target_date.split(' ')[0] : null;
+
+    const status = determineTopicStatus({
+      hasAdminApproval: stat?.approved || false,
+      coveredConfirmations,
+      partialConfirmations,
+      effectiveThreshold,
+      targetDate,
+      todayIST: today,
+    });
+
+    const teacherSet = subjectTeachersMap.get(t.subject);
+    const teacherNames = teacherSet && teacherSet.size > 0 ? Array.from(teacherSet).join(', ') : 'Unassigned';
+
+    return {
+      topic_id: t.id,
+      subject_id: t.subject,
+      course_id: cId,
+      subject_name: subjectNameMap.get(t.subject) || 'General',
+      course_name: selectedCourse.name,
+      topic_name: t.name,
+      seq_no: t.seq_no,
+      target_date: targetDate,
+      covered_confirmations: coveredConfirmations,
+      partial_confirmations: partialConfirmations,
+      first_date_taught: stat?.firstDate || null,
+      last_date_taught: stat?.lastDate || null,
+      effective_threshold: effectiveThreshold,
+      status,
+      teacher_names: teacherNames,
+    };
+  });
+
+  // Group by Subject for Subject Progress
+  const subjectProgressMap = new Map<
+    string,
+    { total: number; planned: number; covered: number; name: string }
+  >();
+
+  for (const s of subjects) {
+    subjectProgressMap.set(s.id, { total: 0, planned: 0, covered: 0, name: s.name });
+  }
+
+  for (const tp of topicProgress) {
+    let sProg = subjectProgressMap.get(tp.subject_id);
+    if (!sProg) {
+      sProg = { total: 0, planned: 0, covered: 0, name: tp.subject_name };
+      subjectProgressMap.set(tp.subject_id, sProg);
+    }
+    sProg.total++;
+    if (tp.target_date && tp.target_date <= today) {
+      sProg.planned++;
+    }
+    if (tp.status === 'covered') {
+      sProg.covered++;
+    }
+  }
+
+  const subjectProgress: SubjectProgressItem[] = Array.from(subjectProgressMap.entries()).map(
+    ([sId, val]) => {
+      const plannedPct = val.total > 0 ? Number(((val.planned / val.total) * 100).toFixed(1)) : 0;
+      const actualPct = val.total > 0 ? Number(((val.covered / val.total) * 100).toFixed(1)) : 0;
+      const variancePct = Number((actualPct - plannedPct).toFixed(1));
+
+      return {
+        subject_id: sId,
+        course_id: cId,
+        subject_name: val.name,
+        total_topics: val.total,
+        planned_topics: val.planned,
+        covered_topics: val.covered,
+        planned_pct: plannedPct,
+        actual_pct: actualPct,
+        variance_pct: variancePct,
+      };
+    }
   );
-  const subjectProgress = subProgRes.rows;
 
-  // 3. Topic Progress
-  const topicProgRes = await query<TopicProgressItem>(
-    `SELECT tp.topic_id, tp.subject_id, tp.course_id, tp.subject_name, tp.course_name,
-            tp.topic_name, tp.seq_no, tp.target_date::text, 
-            tp.covered_confirmations::int, tp.partial_confirmations::int,
-            tp.first_date_taught::text, tp.last_date_taught::text,
-            tp.effective_threshold::int, tp.status,
-            COALESCE(STRING_AGG(DISTINCT tea.name, ', '), 'Unassigned') as teacher_names
-     FROM topic_progress tp
-     LEFT JOIN teacher_subjects ts ON ts.subject_id = tp.subject_id
-     LEFT JOIN teachers tea ON tea.id = ts.teacher_id
-     WHERE tp.course_id = $1
-     GROUP BY tp.topic_id, tp.subject_id, tp.course_id, tp.subject_name, tp.course_name,
-              tp.topic_name, tp.seq_no, tp.target_date, tp.covered_confirmations,
-              tp.partial_confirmations, tp.first_date_taught, tp.last_date_taught,
-              tp.effective_threshold, tp.status
-     ORDER BY tp.subject_name ASC, tp.seq_no ASC`,
-    [cId]
-  );
-  const topicProgress = topicProgRes.rows;
-
-  // 4. Compute Overview Metrics
+  // 4. Overview Metrics
   const totalTopics = topicProgress.length;
   const coveredTopics = topicProgress.filter((t) => t.status === 'covered').length;
   const plannedTopics = topicProgress.filter(
@@ -171,11 +287,13 @@ export async function getDashboardData(courseId?: string) {
   const plannedPct = totalTopics > 0 ? Number(((plannedTopics / totalTopics) * 100).toFixed(1)) : 0;
   const variancePct = Number((coveragePct - plannedPct).toFixed(1));
 
-  const totalClassesRes = await query(
-    `SELECT COUNT(DISTINCT (teacher_id, class_date)) as count FROM entries WHERE course_id = $1`,
-    [cId]
-  );
-  const totalClassesLogged = Number(totalClassesRes.rows[0]?.count || 0);
+  // Distinct classes logged = distinct (teacher, class_date)
+  const distinctClasses = new Set<string>();
+  for (const ent of courseEntries) {
+    if (ent.teacher && ent.class_date) {
+      distinctClasses.add(`${ent.teacher}_${ent.class_date}`);
+    }
+  }
 
   const overviewMetrics: OverviewMetrics = {
     totalTopics,
@@ -187,28 +305,72 @@ export async function getDashboardData(courseId?: string) {
     overdueCount,
     pendingReviewCount,
     enrolledStudents: enrolledCount,
-    totalClassesLogged,
-    confirmationThreshold: threshold,
+    totalClassesLogged: distinctClasses.size,
+    confirmationThreshold: configuredThreshold,
   };
 
   // 5. Teacher Scorecard for this course
-  const teacherScorecardRes = await query<TeacherScorecardItem>(
-    `SELECT tsc.teacher_id, tsc.teacher_name, 
-            tsc.topics_covered::int, tsc.avg_lag_days::float,
-            tsc.last_class_logged::text, tsc.classes_logged_this_month::int,
-            STRING_AGG(DISTINCT s.name, ', ') as subject_names
-     FROM teacher_scorecard tsc
-     JOIN teacher_subjects ts ON ts.teacher_id = tsc.teacher_id
-     JOIN subjects s ON s.id = ts.subject_id AND s.course_id = $1
-     GROUP BY tsc.teacher_id, tsc.teacher_name, tsc.topics_covered, 
-              tsc.avg_lag_days, tsc.last_class_logged, tsc.classes_logged_this_month
-     ORDER BY tsc.topics_covered DESC, tsc.teacher_name ASC`,
-    [cId]
-  );
-  const teacherScorecard = teacherScorecardRes.rows;
+  const teachers = await pb.collection('teachers').getFullList({ filter: 'active = true' });
+  const currentMonthPrefix = today.substring(0, 7); // YYYY-MM
+
+  const teacherScorecard: TeacherScorecardItem[] = [];
+  for (const tea of teachers) {
+    const teaEntries = courseEntries.filter((e) => e.teacher === tea.id);
+    if (teaEntries.length === 0) continue;
+
+    const coveredTopicIds = new Set<string>();
+    let totalLagDays = 0;
+    let lagCount = 0;
+    let lastClassDate: string | null = null;
+    const monthClasses = new Set<string>();
+
+    for (const ent of teaEntries) {
+      const topicObj = topics.find((t) => t.id === ent.topic);
+      const isTopicCovered = topicProgress.find((tp) => tp.topic_id === ent.topic)?.status === 'covered';
+
+      if (isTopicCovered) {
+        coveredTopicIds.add(ent.topic);
+        if (topicObj?.target_date && ent.class_date) {
+          const tDate = new Date(topicObj.target_date.split(' ')[0]).getTime();
+          const cDate = new Date(ent.class_date).getTime();
+          const diffDays = Math.round((cDate - tDate) / (1000 * 60 * 60 * 24));
+          totalLagDays += diffDays;
+          lagCount++;
+        }
+      }
+
+      if (ent.class_date) {
+        if (!lastClassDate || ent.class_date > lastClassDate) {
+          lastClassDate = ent.class_date;
+        }
+        if (ent.class_date.startsWith(currentMonthPrefix)) {
+          monthClasses.add(`${ent.class_date}_${ent.subject}`);
+        }
+      }
+    }
+
+    const teaSubjects = new Set<string>();
+    for (const ent of teaEntries) {
+      const sName = subjectNameMap.get(ent.subject);
+      if (sName) teaSubjects.add(sName);
+    }
+
+    const avgLag = lagCount > 0 ? Number((totalLagDays / lagCount).toFixed(1)) : 0;
+
+    teacherScorecard.push({
+      teacher_id: tea.id,
+      teacher_name: tea.name,
+      topics_covered: coveredTopicIds.size,
+      avg_lag_days: avgLag,
+      last_class_logged: lastClassDate,
+      classes_logged_this_month: monthClasses.size,
+      subject_names: Array.from(teaSubjects).join(', '),
+    });
+  }
+
+  teacherScorecard.sort((a, b) => b.topics_covered - a.topics_covered);
 
   // 6. Cumulative Planned vs Actual Timeline
-  // Collect all distinct dates from target_date and first_date_taught
   const allDatesSet = new Set<string>();
   topicProgress.forEach((t) => {
     if (t.target_date) allDatesSet.add(t.target_date);
@@ -217,12 +379,10 @@ export async function getDashboardData(courseId?: string) {
   allDatesSet.add(today);
 
   const sortedDates = Array.from(allDatesSet).sort();
-
   let plannedAcc = 0;
   let actualAcc = 0;
   const timelineData: TimelineDataPoint[] = [];
 
-  // Group by date
   sortedDates.forEach((d) => {
     const plannedOnDate = topicProgress.filter((t) => t.target_date === d).length;
     const actualOnDate = topicProgress.filter(
@@ -239,22 +399,33 @@ export async function getDashboardData(courseId?: string) {
   });
 
   // 7. Recent Entries Feed
-  const recentEntriesRes = await query<RecentEntryItem>(
-    `SELECT e.id, s.name as student_name, s.roll_no, 
-            tea.name as teacher_name, sub.name as subject_name,
-            top.name as topic_name, e.class_date::text, e.status, 
-            e.remarks, e.review_status, e.flags, e.created_at::text
-     FROM entries e
-     JOIN students s ON s.id = e.student_id
-     JOIN teachers tea ON tea.id = e.teacher_id
-     JOIN subjects sub ON sub.id = e.subject_id
-     JOIN topics top ON top.id = e.topic_id
-     WHERE e.course_id = $1
-     ORDER BY e.created_at DESC
-     LIMIT 15`,
-    [cId]
-  );
-  const recentEntries = recentEntriesRes.rows;
+  const recentEntriesRes = await pb.collection('entries').getList(1, 15, {
+    filter: `course = "${cId}"`,
+    sort: '-created',
+    expand: 'student,teacher,subject,topic',
+  });
+
+  const recentEntries: RecentEntryItem[] = recentEntriesRes.items.map((r) => {
+    const student = (r.expand as any)?.student;
+    const teacher = (r.expand as any)?.teacher;
+    const subject = (r.expand as any)?.subject;
+    const topic = (r.expand as any)?.topic;
+
+    return {
+      id: r.id,
+      student_name: student?.name || 'Unknown',
+      roll_no: student?.roll_no || '',
+      teacher_name: teacher?.name || 'Unknown',
+      subject_name: subject?.name || '',
+      topic_name: topic?.name || '',
+      class_date: r.class_date,
+      status: r.status,
+      remarks: r.remarks || null,
+      review_status: r.review_status,
+      flags: Array.isArray(r.flags) ? r.flags : [],
+      created_at: r.created,
+    };
+  });
 
   return {
     courses,

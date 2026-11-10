@@ -1,0 +1,58 @@
+[
+  {
+    "course_id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "confirmation_threshold": 5,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T08:20:44.974Z"
+  },
+  {
+    "course_id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "confirmation_threshold": 4,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T08:20:44.988Z"
+  },
+  {
+    "course_id": "76457759-048f-4513-be10-cb9b16a62410",
+    "confirmation_threshold": 4,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "course_id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "confirmation_threshold": 4,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "course_id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "confirmation_threshold": 4,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "course_id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "confirmation_threshold": 4,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "course_id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "confirmation_threshold": 4,
+    "daily_entry_cap": 6,
+    "code_ttl_minutes": 120,
+    "require_class_code": false,
+    "updated_at": "2026-10-24T11:10:07.048Z"
+  }
+]

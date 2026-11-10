@@ -1,3 +1,7 @@
+/**
+ * @deprecated The active data backend has been migrated to PocketBase (see src/lib/pb.ts).
+ * This file is retained exclusively as a fallback for legacy standalone Postgres scripts.
+ */
 import { Pool } from 'pg';
 
 // Database connection pool for server-side PostgreSQL / Supabase

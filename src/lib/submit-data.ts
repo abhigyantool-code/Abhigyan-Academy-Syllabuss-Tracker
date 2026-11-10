@@ -1,4 +1,4 @@
-import { query } from './db';
+import { getPbClient } from './pb';
 
 export interface SubmitCourseData {
   id: string;
@@ -37,55 +37,92 @@ export interface SubmitStudent {
 }
 
 export async function getSubmitFormData() {
-  // 1. Active Courses with Settings
-  const coursesRes = await query<SubmitCourseData>(`
-    SELECT c.id, c.name, c.code, c.sort_order,
-           COALESCE(cs.require_class_code, true) as require_class_code
-    FROM courses c
-    LEFT JOIN course_settings cs ON cs.course_id = c.id
-    WHERE c.active = true
-    ORDER BY c.sort_order ASC, c.name ASC
-  `);
+  const pb = await getPbClient();
 
-  // 2. Teachers mapped to course (through subject assignments)
-  const teachersRes = await query<SubmitTeacher>(`
-    SELECT DISTINCT tea.id, tea.name, s.course_id
-    FROM teachers tea
-    JOIN teacher_subjects ts ON ts.teacher_id = tea.id
-    JOIN subjects s ON s.id = ts.subject_id
-    WHERE tea.active = true
-    ORDER BY tea.name ASC
-  `);
+  // 1. Courses with settings
+  const [courses, settings] = await Promise.all([
+    pb.collection('courses').getFullList({ filter: 'active = true', sort: 'sort_order' }),
+    pb.collection('course_settings').getFullList(),
+  ]);
 
-  // 3. Subjects mapped to (course_id, teacher_id)
-  const subjectsRes = await query<SubmitSubject>(`
-    SELECT DISTINCT s.id, s.name, s.course_id, ts.teacher_id
-    FROM subjects s
-    JOIN teacher_subjects ts ON ts.subject_id = s.id
-    ORDER BY s.name ASC
-  `);
+  const settingsMap = new Map(settings.map((s) => [s.course, s]));
+  const courseList: SubmitCourseData[] = courses.map((c) => ({
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    sort_order: c.sort_order || 0,
+    require_class_code: settingsMap.get(c.id)?.require_class_code ?? false,
+  }));
 
-  // 4. Topics for all subjects
-  const topicsRes = await query<SubmitTopic>(`
-    SELECT t.id, t.subject_id, t.name, t.seq_no, t.target_date::text
-    FROM topics t
-    ORDER BY t.seq_no ASC
-  `);
+  // 2 & 3. Teachers & Subjects via teacher_subjects mapping
+  const teacherSubjects = await pb.collection('teacher_subjects').getFullList({
+    expand: 'teacher,subject',
+  });
 
-  // 5. Enrolled Active Students per course
-  const studentsRes = await query<SubmitStudent>(`
-    SELECT s.id, s.roll_no, s.name, e.course_id
-    FROM students s
-    JOIN enrollments e ON e.student_id = s.id
-    WHERE s.active = true
-    ORDER BY s.roll_no ASC, s.name ASC
-  `);
+  const teacherMap = new Map<string, SubmitTeacher>();
+  const subjectMap = new Map<string, SubmitSubject>();
+
+  for (const ts of teacherSubjects) {
+    const teacher = (ts.expand as any)?.teacher;
+    const subject = (ts.expand as any)?.subject;
+
+    if (teacher && subject && teacher.active) {
+      const teacherKey = `${teacher.id}_${subject.course}`;
+      if (!teacherMap.has(teacherKey)) {
+        teacherMap.set(teacherKey, {
+          id: teacher.id,
+          name: teacher.name,
+          course_id: subject.course,
+        });
+      }
+
+      const subjectKey = `${subject.id}_${teacher.id}`;
+      if (!subjectMap.has(subjectKey)) {
+        subjectMap.set(subjectKey, {
+          id: subject.id,
+          name: subject.name,
+          course_id: subject.course,
+          teacher_id: teacher.id,
+        });
+      }
+    }
+  }
+
+  // 4. Topics
+  const topics = await pb.collection('topics').getFullList({ sort: 'seq_no' });
+  const topicList: SubmitTopic[] = topics.map((t) => ({
+    id: t.id,
+    subject_id: t.subject,
+    name: t.name,
+    seq_no: t.seq_no,
+    target_date: t.target_date ? t.target_date.split(' ')[0] : null,
+  }));
+
+  // 5. Students via enrollments
+  const enrollments = await pb.collection('enrollments').getFullList({
+    expand: 'student',
+  });
+
+  const studentList: SubmitStudent[] = [];
+  for (const en of enrollments) {
+    const student = (en.expand as any)?.student;
+    if (student && student.active) {
+      studentList.push({
+        id: student.id,
+        roll_no: student.roll_no,
+        name: student.name,
+        course_id: en.course,
+      });
+    }
+  }
+
+  studentList.sort((a, b) => a.roll_no.localeCompare(b.roll_no));
 
   return {
-    courses: coursesRes.rows,
-    teachers: teachersRes.rows,
-    subjects: subjectsRes.rows,
-    topics: topicsRes.rows,
-    students: studentsRes.rows,
+    courses: courseList,
+    teachers: Array.from(teacherMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+    subjects: Array.from(subjectMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+    topics: topicList,
+    students: studentList,
   };
 }

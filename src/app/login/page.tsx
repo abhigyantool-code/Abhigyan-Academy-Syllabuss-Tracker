@@ -1,5 +1,5 @@
 import React from 'react';
-import { query } from '@/lib/db';
+import { getPbClient } from '@/lib/pb';
 import { getSession } from '@/lib/session';
 import { redirect } from 'next/navigation';
 import { TeacherLoginForm } from '@/components/auth/teacher-login-form';
@@ -29,26 +29,46 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   // Fetch active teachers for quick login selection
-  const teachersRes = await query(
-    `SELECT 
-       t.id, 
-       t.name, 
-       t.phone,
-       string_agg(DISTINCT s.name, ', ' ORDER BY s.name) as subjects
-     FROM teachers t
-     LEFT JOIN teacher_subjects ts ON t.id = ts.teacher_id
-     LEFT JOIN subjects s ON ts.subject_id = s.id
-     WHERE t.active = true
-     GROUP BY t.id, t.name, t.phone
-     ORDER BY t.name;`
-  );
+  let teachers: { id: string; name: string; phone: string | null; subjects: string }[] = [];
+  try {
+    const pb = await getPbClient();
+    const [teachersList, teacherSubjectsList] = await Promise.all([
+      pb.collection('teachers').getFullList({
+        filter: 'active = true',
+        sort: 'name',
+      }),
+      pb.collection('teacher_subjects').getFullList({
+        expand: 'subject',
+      }),
+    ]);
 
-  const teachers = teachersRes.rows.map((r: any) => ({
-    id: r.id,
-    name: r.name,
-    phone: r.phone,
-    subjects: r.subjects || 'General Faculty',
-  }));
+    const teacherSubMap = new Map<string, Set<string>>();
+    for (const ts of teacherSubjectsList) {
+      const tId = ts.teacher;
+      const subName = (ts.expand as any)?.subject?.name;
+      if (tId && subName) {
+        if (!teacherSubMap.has(tId)) {
+          teacherSubMap.set(tId, new Set());
+        }
+        teacherSubMap.get(tId)!.add(subName);
+      }
+    }
+
+    teachers = teachersList.map((t) => {
+      const subNames = teacherSubMap.get(t.id);
+      const subjectsStr = subNames && subNames.size > 0
+        ? Array.from(subNames).sort().join(', ')
+        : 'General Faculty';
+      return {
+        id: t.id,
+        name: t.name,
+        phone: t.phone || null,
+        subjects: subjectsStr,
+      };
+    });
+  } catch (err) {
+    console.error('Failed to load teachers for login page:', err);
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-center items-center p-4 font-sans selection:bg-indigo-500/30 selection:text-indigo-200">

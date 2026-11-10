@@ -1,111 +1,218 @@
-import { query } from './db';
+import { getPbClient } from './pb';
 import { getTodayIST } from './date-utils';
 
 export async function getAdminInitialData() {
   const today = getTodayIST();
+  const pb = await getPbClient();
 
   // 1. Courses with Settings
-  const coursesRes = await query(`
-    SELECT c.id, c.name, c.code, c.sort_order, c.active, c.created_at,
-           cs.confirmation_threshold, cs.daily_entry_cap, cs.code_ttl_minutes, cs.require_class_code
-    FROM courses c
-    LEFT JOIN course_settings cs ON cs.course_id = c.id
-    ORDER BY c.sort_order ASC, c.name ASC
-  `);
+  const [courses, courseSettings] = await Promise.all([
+    pb.collection('courses').getFullList({ sort: 'sort_order' }),
+    pb.collection('course_settings').getFullList(),
+  ]);
 
-  // 2. Subjects with Topics count
-  const subjectsRes = await query(`
-    SELECT s.id, s.course_id, s.name, s.sort_order, c.name as course_name, c.code as course_code,
-           COUNT(t.id)::int as topics_count
-    FROM subjects s
-    JOIN courses c ON c.id = s.course_id
-    LEFT JOIN topics t ON t.subject_id = s.id
-    GROUP BY s.id, s.course_id, s.name, s.sort_order, c.name, c.code
-    ORDER BY s.sort_order ASC, s.name ASC
-  `);
+  const settingsMap = new Map(courseSettings.map((s) => [s.course, s]));
+  const coursesData = courses.map((c) => {
+    const s = settingsMap.get(c.id);
+    return {
+      id: c.id,
+      name: c.name,
+      code: c.code,
+      sort_order: c.sort_order || 0,
+      active: c.active,
+      created_at: c.created,
+      confirmation_threshold: s?.confirmation_threshold || 5,
+      daily_entry_cap: s?.daily_entry_cap || 6,
+      code_ttl_minutes: s?.code_ttl_minutes || 60,
+      require_class_code: s?.require_class_code ?? false,
+    };
+  });
 
-  // 3. Topics
-  const topicsRes = await query(`
-    SELECT t.id, t.subject_id, t.name, t.seq_no, t.target_date::text, t.notes,
-           s.name as subject_name, s.course_id, c.code as course_code
-    FROM topics t
-    JOIN subjects s ON s.id = t.subject_id
-    JOIN courses c ON c.id = s.course_id
-    ORDER BY s.sort_order ASC, t.seq_no ASC
-  `);
+  const courseMap = new Map(courses.map((c) => [c.id, c]));
+
+  // 2. Subjects with Courses & Topics Count
+  const [subjects, topics] = await Promise.all([
+    pb.collection('subjects').getFullList({ sort: 'sort_order', expand: 'course' }),
+    pb.collection('topics').getFullList({ sort: 'seq_no' }),
+  ]);
+
+  const subjectTopicCountMap = new Map<string, number>();
+  for (const t of topics) {
+    subjectTopicCountMap.set(t.subject, (subjectTopicCountMap.get(t.subject) || 0) + 1);
+  }
+
+  const subjectsData = subjects.map((s) => {
+    const course = (s.expand as any)?.course || courseMap.get(s.course);
+    return {
+      id: s.id,
+      course_id: s.course,
+      name: s.name,
+      sort_order: s.sort_order || 0,
+      course_name: course?.name || 'Unknown',
+      course_code: course?.code || '',
+      topics_count: subjectTopicCountMap.get(s.id) || 0,
+    };
+  });
+
+  const subjectMap = new Map(subjects.map((s) => [s.id, s]));
+
+  // 3. Topics Data
+  const topicsData = topics.map((t) => {
+    const sub = subjectMap.get(t.subject);
+    const course = sub ? courseMap.get(sub.course) : null;
+    return {
+      id: t.id,
+      subject_id: t.subject,
+      name: t.name,
+      seq_no: t.seq_no,
+      target_date: t.target_date ? t.target_date.split(' ')[0] : null,
+      notes: t.notes || null,
+      subject_name: sub?.name || 'Unknown',
+      course_id: sub?.course || '',
+      course_code: course?.code || '',
+    };
+  });
 
   // 4. Teachers with Assigned Subjects
-  const teachersRes = await query(`
-    SELECT tea.id, tea.name, tea.phone, tea.active, tea.created_at,
-           COALESCE(ARRAY_AGG(ts.subject_id) FILTER (WHERE ts.subject_id IS NOT NULL), '{}') as assigned_subject_ids,
-           COALESCE(STRING_AGG(DISTINCT s.name, ', '), 'None') as assigned_subject_names
-    FROM teachers tea
-    LEFT JOIN teacher_subjects ts ON ts.teacher_id = tea.id
-    LEFT JOIN subjects s ON s.id = ts.subject_id
-    GROUP BY tea.id, tea.name, tea.phone, tea.active, tea.created_at
-    ORDER BY tea.name ASC
-  `);
+  const [teachers, teacherSubjects] = await Promise.all([
+    pb.collection('teachers').getFullList({ sort: 'name' }),
+    pb.collection('teacher_subjects').getFullList(),
+  ]);
+
+  const teacherAssignedSubjectIds = new Map<string, string[]>();
+  for (const ts of teacherSubjects) {
+    if (!teacherAssignedSubjectIds.has(ts.teacher)) {
+      teacherAssignedSubjectIds.set(ts.teacher, []);
+    }
+    teacherAssignedSubjectIds.get(ts.teacher)!.push(ts.subject);
+  }
+
+  const teachersData = teachers.map((tea) => {
+    const assignedIds = teacherAssignedSubjectIds.get(tea.id) || [];
+    const assignedNames = assignedIds.map((sId) => subjectMap.get(sId)?.name).filter(Boolean);
+    return {
+      id: tea.id,
+      name: tea.name,
+      phone: tea.phone || null,
+      active: tea.active,
+      created_at: tea.created,
+      assigned_subject_ids: assignedIds,
+      assigned_subject_names: assignedNames.length > 0 ? assignedNames.join(', ') : 'None',
+    };
+  });
 
   // 5. Students with Enrolled Courses
-  const studentsRes = await query(`
-    SELECT stu.id, stu.roll_no, stu.name, stu.active, stu.created_at,
-           COALESCE(ARRAY_AGG(e.course_id) FILTER (WHERE e.course_id IS NOT NULL), '{}') as enrolled_course_ids,
-           COALESCE(STRING_AGG(DISTINCT c.code, ', '), 'None') as enrolled_course_codes
-    FROM students stu
-    LEFT JOIN enrollments e ON e.student_id = stu.id
-    LEFT JOIN courses c ON c.id = e.course_id
-    GROUP BY stu.id, stu.roll_no, stu.name, stu.active, stu.created_at
-    ORDER BY stu.roll_no ASC
-  `);
+  const [students, enrollments] = await Promise.all([
+    pb.collection('students').getFullList({ sort: 'roll_no' }),
+    pb.collection('enrollments').getFullList(),
+  ]);
+
+  const studentEnrolledCourseIds = new Map<string, string[]>();
+  for (const en of enrollments) {
+    if (!studentEnrolledCourseIds.has(en.student)) {
+      studentEnrolledCourseIds.set(en.student, []);
+    }
+    studentEnrolledCourseIds.get(en.student)!.push(en.course);
+  }
+
+  const studentsData = students.map((stu) => {
+    const courseIds = studentEnrolledCourseIds.get(stu.id) || [];
+    const courseCodes = courseIds.map((cId) => courseMap.get(cId)?.code).filter(Boolean);
+    return {
+      id: stu.id,
+      roll_no: stu.roll_no,
+      name: stu.name,
+      active: stu.active,
+      created_at: stu.created,
+      enrolled_course_ids: courseIds,
+      enrolled_course_codes: courseCodes.length > 0 ? courseCodes.join(', ') : 'None',
+    };
+  });
 
   // 6. Active Class Codes
-  const classCodesRes = await query(`
-    SELECT cc.id, cc.course_id, c.name as course_name, c.code as course_code,
-           cc.batch, cc.class_date::text, cc.code, cc.valid_from::text, cc.valid_until::text,
-           cc.created_at::text,
-           (now() BETWEEN cc.valid_from AND cc.valid_until) as is_active_now
-    FROM class_codes cc
-    JOIN courses c ON c.id = cc.course_id
-    ORDER BY cc.class_date DESC, cc.created_at DESC
-    LIMIT 30
-  `);
+  const nowIso = new Date().toISOString();
+  const classCodes = await pb.collection('class_codes').getList(1, 30, {
+    sort: '-created',
+    expand: 'course',
+  });
 
-  // 7. Review Queue (Flagged Entries with review_status = 'pending')
-  const reviewQueueRes = await query(`
-    SELECT e.id, e.class_date::text, e.status, e.remarks, e.flags, e.review_status,
-           e.device_id, e.created_at::text,
-           stu.name as student_name, stu.roll_no,
-           tea.name as teacher_name,
-           sub.name as subject_name,
-           top.name as topic_name, top.seq_no,
-           c.name as course_name, c.code as course_code
-    FROM entries e
-    JOIN students stu ON stu.id = e.student_id
-    JOIN teachers tea ON tea.id = e.teacher_id
-    JOIN subjects sub ON sub.id = e.subject_id
-    JOIN topics top ON top.id = e.topic_id
-    JOIN courses c ON c.id = e.course_id
-    WHERE LOWER(e.review_status) IN ('pending', 'flagged')
-    ORDER BY e.created_at DESC
-  `);
+  const classCodesData = classCodes.items.map((cc) => {
+    const course = (cc.expand as any)?.course || courseMap.get(cc.course);
+    const isActive = cc.valid_from <= nowIso && cc.valid_until >= nowIso;
+    return {
+      id: cc.id,
+      course_id: cc.course,
+      course_name: course?.name || 'Unknown',
+      course_code: course?.code || '',
+      batch: cc.batch || null,
+      class_date: cc.class_date,
+      code: cc.code,
+      valid_from: cc.valid_from,
+      valid_until: cc.valid_until,
+      created_at: cc.created,
+      is_active_now: isActive,
+    };
+  });
+
+  // 7. Review Queue (Flagged Entries with review_status in pending/flagged)
+  const reviewQueue = await pb.collection('entries').getFullList({
+    filter: 'review_status = "pending" || review_status = "FLAGGED" || review_status = "flagged"',
+    sort: '-created',
+    expand: 'student,teacher,subject,topic,course',
+  });
+
+  const reviewQueueData = reviewQueue.map((e) => {
+    const student = (e.expand as any)?.student;
+    const teacher = (e.expand as any)?.teacher;
+    const subject = (e.expand as any)?.subject;
+    const topic = (e.expand as any)?.topic;
+    const course = (e.expand as any)?.course;
+
+    return {
+      id: e.id,
+      class_date: e.class_date,
+      status: e.status,
+      remarks: e.remarks || null,
+      flags: Array.isArray(e.flags) ? e.flags : [],
+      review_status: e.review_status,
+      device_id: e.device_id,
+      created_at: e.created,
+      student_name: student?.name || 'Unknown',
+      roll_no: student?.roll_no || '',
+      teacher_name: teacher?.name || 'Unknown',
+      subject_name: subject?.name || 'Unknown',
+      topic_name: topic?.name || 'Unknown',
+      seq_no: topic?.seq_no || 0,
+      course_name: course?.name || 'Unknown',
+      course_code: course?.code || '',
+    };
+  });
 
   // 8. Audit Log
-  const auditLogRes = await query(`
-    SELECT id, actor_label, action, entity, entity_id, before, after, created_at::text
-    FROM audit_log
-    ORDER BY created_at DESC
-    LIMIT 50
-  `);
+  const auditLogs = await pb.collection('audit_log').getList(1, 50, {
+    sort: '-created',
+  });
+
+  const auditLogData = auditLogs.items.map((a) => ({
+    id: a.id,
+    actor_label: a.actor_label,
+    action: a.action,
+    entity: a.entity,
+    entity_id: a.entity_id || null,
+    before: a.before || null,
+    after: a.after || null,
+    created_at: a.created,
+  }));
 
   return {
     today,
-    courses: coursesRes.rows,
-    subjects: subjectsRes.rows,
-    topics: topicsRes.rows,
-    teachers: teachersRes.rows,
-    students: studentsRes.rows,
-    classCodes: classCodesRes.rows,
-    reviewQueue: reviewQueueRes.rows,
-    auditLog: auditLogRes.rows,
+    courses: coursesData,
+    subjects: subjectsData,
+    topics: topicsData,
+    teachers: teachersData,
+    students: studentsData,
+    classCodes: classCodesData,
+    reviewQueue: reviewQueueData,
+    auditLog: auditLogData,
   };
 }

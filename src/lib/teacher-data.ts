@@ -1,5 +1,6 @@
-import { query } from './db';
+import { getPbClient } from './pb';
 import { getTodayIST } from './date-utils';
+import { computeEffectiveThreshold, determineTopicStatus } from './coverage-calculator';
 
 export interface TeacherAssignedSubject {
   subject_id: string;
@@ -58,134 +59,215 @@ export async function getTeacherDashboardData(
   subjectId?: string
 ): Promise<TeacherDashboardData | null> {
   const today = getTodayIST();
+  const pb = await getPbClient();
 
   // 1. Fetch Teacher Profile
-  const teacherRes = await query(`SELECT id, name, phone, active FROM teachers WHERE id = $1`, [teacherId]);
-  if (teacherRes.rows.length === 0) return null;
-  const teacher = teacherRes.rows[0];
+  let teacher: any;
+  try {
+    teacher = await pb.collection('teachers').getOne(teacherId);
+  } catch {
+    return null;
+  }
 
-  // 2. Fetch Assigned Subjects with Topic Stats
-  const subjectsRes = await query(
-    `SELECT 
-       s.id as subject_id,
-       s.name as subject_name,
-       c.id as course_id,
-       c.name as course_name,
-       c.code as course_code,
-       COUNT(DISTINCT t.id) as total_topics,
-       COUNT(DISTINCT CASE WHEN tp.status = 'covered' THEN t.id END) as covered_topics
-     FROM teacher_subjects ts
-     JOIN subjects s ON ts.subject_id = s.id
-     JOIN courses c ON s.course_id = c.id
-     LEFT JOIN topics t ON s.id = t.subject_id
-     LEFT JOIN topic_progress tp ON t.id = tp.topic_id
-     WHERE ts.teacher_id = $1 AND c.active = true
-     GROUP BY s.id, s.name, c.id, c.name, c.code, c.sort_order, s.sort_order
-     ORDER BY c.sort_order, s.sort_order;`,
-    [teacherId]
-  );
-
-  const subjects: TeacherAssignedSubject[] = subjectsRes.rows.map((row) => {
-    const total = Number(row.total_topics) || 0;
-    const covered = Number(row.covered_topics) || 0;
-    const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
-    return {
-      subject_id: row.subject_id,
-      subject_name: row.subject_name,
-      course_id: row.course_id,
-      course_name: row.course_name,
-      course_code: row.course_code,
-      total_topics: total,
-      covered_topics: covered,
-      progress_pct: pct,
-    };
+  // 2. Fetch Assigned Subjects with Courses
+  const teacherSubjects = await pb.collection('teacher_subjects').getFullList({
+    filter: `teacher = "${teacherId}"`,
+    expand: 'subject.course',
   });
+
+  if (teacherSubjects.length === 0) {
+    return {
+      teacher: { id: teacher.id, name: teacher.name, phone: teacher.phone },
+      subjects: [],
+      selectedSubjectId: '',
+      selectedCourseId: '',
+      topics: [],
+      recentStudentLogs: [],
+      today,
+    };
+  }
+
+  // Group by distinct subjects
+  const subjectMap = new Map<string, any>();
+  for (const ts of teacherSubjects) {
+    const sub = (ts.expand as any)?.subject;
+    const course = sub?.expand?.course;
+    if (sub && course && course.active) {
+      subjectMap.set(sub.id, { sub, course });
+    }
+  }
+
+  // Fetch all enrollments to know student counts per course
+  const enrollments = await pb.collection('enrollments').getFullList();
+  const courseEnrollmentCount = new Map<string, number>();
+  for (const en of enrollments) {
+    courseEnrollmentCount.set(en.course, (courseEnrollmentCount.get(en.course) || 0) + 1);
+  }
+
+  // Fetch course settings for confirmation thresholds
+  const courseSettingsList = await pb.collection('course_settings').getFullList();
+  const settingsMap = new Map(courseSettingsList.map((s) => [s.course, s]));
+
+  const subjects: TeacherAssignedSubject[] = [];
+
+  for (const [sId, { sub, course }] of subjectMap.entries()) {
+    const allTopics = await pb.collection('topics').getFullList({
+      filter: `subject = "${sId}"`,
+      sort: 'seq_no',
+    });
+
+    const entries = await pb.collection('entries').getFullList({
+      filter: `subject = "${sId}" && review_status != "rejected" && review_status != "VIOLATION"`,
+    });
+
+    const enrolled = courseEnrollmentCount.get(course.id) || 10;
+    const thresholdSetting = settingsMap.get(course.id)?.confirmation_threshold || 5;
+    const effectiveThreshold = computeEffectiveThreshold(thresholdSetting, enrolled);
+
+    // Group entries by topic
+    const topicStats = new Map<string, { covered: Set<string>; partial: Set<string>; approved: boolean }>();
+    for (const ent of entries) {
+      if (!topicStats.has(ent.topic)) {
+        topicStats.set(ent.topic, { covered: new Set(), partial: new Set(), approved: false });
+      }
+      const stat = topicStats.get(ent.topic)!;
+      if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+        stat.covered.add(ent.student);
+      }
+      if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+        stat.partial.add(ent.student);
+      }
+      if (ent.review_status === 'approved' && ent.status === 'covered') {
+        stat.approved = true;
+      }
+    }
+
+    let coveredCount = 0;
+    for (const t of allTopics) {
+      const stat = topicStats.get(t.id);
+      const isCovered =
+        stat?.approved ||
+        (stat?.covered.size || 0) >= effectiveThreshold;
+      if (isCovered) coveredCount++;
+    }
+
+    const total = allTopics.length;
+    const pct = total > 0 ? Math.round((coveredCount / total) * 100) : 0;
+
+    subjects.push({
+      subject_id: sub.id,
+      subject_name: sub.name,
+      course_id: course.id,
+      course_name: course.name,
+      course_code: course.code,
+      total_topics: total,
+      covered_topics: coveredCount,
+      progress_pct: pct,
+    });
+  }
 
   const activeSubject = subjects.find((s) => s.subject_id === subjectId) || subjects[0];
   const selectedSubjectId = activeSubject?.subject_id || '';
   const selectedCourseId = activeSubject?.course_id || '';
 
-  // 3. Fetch Topics for selected subject
+  // 3. Fetch detailed topic line items for selected subject
   let topics: TeacherTopicItem[] = [];
   if (selectedSubjectId) {
-    const topicsRes = await query(
-      `SELECT 
-         t.id,
-         t.subject_id,
-         s.course_id,
-         t.name,
-         t.seq_no,
-         t.target_date,
-         t.notes,
-         COALESCE(tp.status, 'not_started') as status,
-         COALESCE(tp.covered_confirmations, 0) as student_confirmations
-       FROM topics t
-       JOIN subjects s ON t.subject_id = s.id
-       LEFT JOIN topic_progress tp ON t.id = tp.topic_id
-       WHERE t.subject_id = $1
-       ORDER BY t.seq_no;`,
-      [selectedSubjectId]
-    );
+    const rawTopics = await pb.collection('topics').getFullList({
+      filter: `subject = "${selectedSubjectId}"`,
+      sort: 'seq_no',
+    });
 
-    topics = topicsRes.rows.map((r) => ({
-      id: r.id,
-      subject_id: r.subject_id,
-      course_id: r.course_id,
-      name: r.name,
-      seq_no: Number(r.seq_no),
-      target_date: r.target_date ? new Date(r.target_date).toISOString().slice(0, 10) : null,
-      notes: r.notes,
-      status: r.status as any,
-      student_confirmations: Number(r.student_confirmations),
-    }));
+    const entries = await pb.collection('entries').getFullList({
+      filter: `subject = "${selectedSubjectId}" && review_status != "rejected" && review_status != "VIOLATION"`,
+    });
+
+    const enrolled = courseEnrollmentCount.get(selectedCourseId) || 10;
+    const thresholdSetting = settingsMap.get(selectedCourseId)?.confirmation_threshold || 5;
+    const effectiveThreshold = computeEffectiveThreshold(thresholdSetting, enrolled);
+
+    const topicStats = new Map<string, { covered: Set<string>; partial: Set<string>; approved: boolean }>();
+    for (const ent of entries) {
+      if (!topicStats.has(ent.topic)) {
+        topicStats.set(ent.topic, { covered: new Set(), partial: new Set(), approved: false });
+      }
+      const stat = topicStats.get(ent.topic)!;
+      if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+        stat.covered.add(ent.student);
+      }
+      if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+        stat.partial.add(ent.student);
+      }
+      if (ent.review_status === 'approved' && ent.status === 'covered') {
+        stat.approved = true;
+      }
+    }
+
+    topics = rawTopics.map((t) => {
+      const stat = topicStats.get(t.id);
+      const coveredConfirmations = stat?.covered.size || 0;
+      const partialConfirmations = stat?.partial.size || 0;
+      const targetDate = t.target_date ? t.target_date.split(' ')[0] : null;
+
+      const rawStatus = determineTopicStatus({
+        hasAdminApproval: stat?.approved || false,
+        coveredConfirmations,
+        partialConfirmations,
+        effectiveThreshold,
+        targetDate,
+        todayIST: today,
+      });
+
+      const normalizedStatus = rawStatus === 'unverified' ? 'in_progress' : rawStatus;
+
+      return {
+        id: t.id,
+        subject_id: t.subject,
+        course_id: selectedCourseId,
+        name: t.name,
+        seq_no: t.seq_no,
+        target_date: targetDate,
+        notes: t.notes || null,
+        status: normalizedStatus as any,
+        student_confirmations: coveredConfirmations,
+      };
+    });
   }
 
   // 4. Fetch recent student logs for this teacher
-  const logsRes = await query(
-    `SELECT 
-       e.id,
-       e.class_date,
-       e.status,
-       e.remarks,
-       e.created_at,
-       s.name as student_name,
-       s.roll_no as student_roll,
-       sub.name as subject_name,
-       top.id as topic_id,
-       top.name as topic_name,
-       top.seq_no as topic_seq,
-       c.code as course_code
-     FROM entries e
-     JOIN students s ON e.student_id = s.id
-     JOIN subjects sub ON e.subject_id = sub.id
-     JOIN topics top ON e.topic_id = top.id
-     JOIN courses c ON e.course_id = c.id
-     WHERE e.teacher_id = $1
-     ORDER BY e.created_at DESC
-     LIMIT 40;`,
-    [teacherId]
-  );
+  const logsRes = await pb.collection('entries').getList(1, 40, {
+    filter: `teacher = "${teacherId}"`,
+    sort: '-created',
+    expand: 'student,subject,topic,course',
+  });
 
-  const recentStudentLogs: TeacherRecentEntry[] = logsRes.rows.map((r) => ({
-    id: r.id,
-    class_date: r.class_date ? new Date(r.class_date).toISOString().slice(0, 10) : '',
-    status: r.status,
-    remarks: r.remarks,
-    created_at: r.created_at ? new Date(r.created_at).toISOString() : '',
-    student_name: r.student_name,
-    student_roll: r.student_roll,
-    subject_name: r.subject_name,
-    topic_id: r.topic_id,
-    topic_name: r.topic_name,
-    topic_seq: Number(r.topic_seq),
-    course_code: r.course_code,
-  }));
+  const recentStudentLogs: TeacherRecentEntry[] = logsRes.items.map((r) => {
+    const student = (r.expand as any)?.student;
+    const subject = (r.expand as any)?.subject;
+    const topic = (r.expand as any)?.topic;
+    const course = (r.expand as any)?.course;
+
+    return {
+      id: r.id,
+      class_date: r.class_date || '',
+      status: r.status,
+      remarks: r.remarks || null,
+      created_at: r.created,
+      student_name: student?.name || 'Unknown Student',
+      student_roll: student?.roll_no || '',
+      subject_name: subject?.name || '',
+      topic_id: topic?.id || r.topic,
+      topic_name: topic?.name || '',
+      topic_seq: topic?.seq_no || 0,
+      course_code: course?.code || '',
+    };
+  });
 
   return {
     teacher: {
       id: teacher.id,
       name: teacher.name,
-      phone: teacher.phone,
+      phone: teacher.phone || null,
     },
     subjects,
     selectedSubjectId,

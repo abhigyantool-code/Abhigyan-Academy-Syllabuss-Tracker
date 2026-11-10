@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { getPbClient } from '@/lib/pb';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,8 +9,9 @@ export async function GET() {
   let dbHealthy = false;
 
   try {
-    await query('SELECT 1');
-    dbHealthy = true;
+    const pb = await getPbClient();
+    const health = await pb.health.check();
+    dbHealthy = health.code === 200;
   } catch {
     dbHealthy = false;
   }

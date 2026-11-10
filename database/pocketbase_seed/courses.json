@@ -1,0 +1,58 @@
+[
+  {
+    "id": "f552f044-2ec4-4939-b955-6ffacd22099a",
+    "name": "National Defence Academy",
+    "code": "NDA",
+    "sort_order": 1,
+    "active": true,
+    "created_at": "2026-10-24T08:20:44.966Z"
+  },
+  {
+    "id": "1c7c7590-4326-40da-8db2-b1709d1c2474",
+    "name": "Combined Defence Services",
+    "code": "CDS",
+    "sort_order": 2,
+    "active": true,
+    "created_at": "2026-10-24T08:20:44.980Z"
+  },
+  {
+    "id": "76457759-048f-4513-be10-cb9b16a62410",
+    "name": "Air Force Common Admission Test",
+    "code": "AFCAT",
+    "sort_order": 3,
+    "active": true,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "id": "0dc2b890-1715-468f-8aed-7f6fe4c2b82a",
+    "name": "Services Selection Board & GD",
+    "code": "SSBGD",
+    "sort_order": 4,
+    "active": true,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "id": "f738e1d7-b5a1-42c3-bd1d-b61bae772039",
+    "name": "Staff Selection Commission (GD)",
+    "code": "SSCGD",
+    "sort_order": 5,
+    "active": true,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "id": "34852013-ff65-40a0-b9c9-335240430ae3",
+    "name": "Agniveer (Army / Navy / IAF)",
+    "code": "AGNIVEER",
+    "sort_order": 6,
+    "active": true,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  },
+  {
+    "id": "ba158506-9e4d-4f29-8d2c-7096c92f6db4",
+    "name": "Merchant Navy Entrance",
+    "code": "MERCHANT_NAVY",
+    "sort_order": 7,
+    "active": true,
+    "created_at": "2026-10-24T11:10:07.048Z"
+  }
+]
