@@ -4,8 +4,38 @@ import { getTodayIST, checkAcademyHours } from '@/lib/date-utils';
 import { verifyStudent } from '@/lib/student-guard';
 import { submitEntrySchema, analyzeMisuseFlags } from '@/lib/submission-validation';
 
+// In-memory sliding window rate limiter: max 30 submissions per IP per minute
+const ipRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function checkIpRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const limit = ipRateLimits.get(ip);
+  if (!limit || limit.resetAt < now) {
+    ipRateLimits.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (limit.count >= 30) {
+    return false;
+  }
+  limit.count++;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    // 0. IP-Level Rate Limit (Roadmap 2D: max 30 requests per minute)
+    const clientIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      '127.0.0.1';
+
+    if (!checkIpRateLimit(clientIp)) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded: Too many submission requests from your network. Please wait a minute.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
 
     // 1. Active Academy Hours Check (06:30 AM - 09:00 PM IST, Mon-Sat)
