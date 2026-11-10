@@ -61,6 +61,8 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty' }: TeacherLo
       if (res.success) {
         router.push('/teacher');
         router.refresh();
+      } else if (res.error) {
+        setError(res.error);
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please verify your PIN.');
@@ -84,6 +86,8 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty' }: TeacherLo
       if (res.success) {
         router.push('/admin');
         router.refresh();
+      } else if (res.error) {
+        setError(res.error);
       }
     } catch (err: any) {
       setError(err.message || 'Access denied. Incorrect master password.');

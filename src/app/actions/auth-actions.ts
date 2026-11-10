@@ -7,74 +7,84 @@ import { getTodayIST } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-export async function teacherLoginAction(teacherId: string, pin: string) {
-  if (!teacherId || !pin) {
-    throw new Error('Please select your faculty profile and enter your PIN.');
-  }
-
-  const pb = await getPbClient();
-
-  let teacher: any;
+export async function teacherLoginAction(teacherId: string, pin: string): Promise<{ success: boolean; error?: string }> {
   try {
-    teacher = await pb.collection('teachers').getOne(teacherId);
-  } catch {
-    throw new Error('Teacher record not found.');
+    if (!teacherId || !pin) {
+      return { success: false, error: 'Please select your faculty profile and enter your PIN.' };
+    }
+
+    const pb = await getPbClient();
+
+    let teacher: any;
+    try {
+      teacher = await pb.collection('teachers').getOne(teacherId);
+    } catch {
+      return { success: false, error: 'Teacher record not found.' };
+    }
+
+    if (!teacher.active) {
+      return { success: false, error: 'This faculty account is deactivated. Please contact the administrator.' };
+    }
+
+    if (teacher.pin !== pin.trim()) {
+      return { success: false, error: 'Incorrect PIN. The default PIN is 1234. Please try again.' };
+    }
+
+    // Create session
+    await createSession({
+      userId: teacher.id,
+      role: 'faculty',
+      name: teacher.name,
+      teacherId: teacher.id,
+    });
+
+    await logAudit({
+      action: 'TEACHER_LOGIN',
+      entity: 'teachers',
+      entityId: teacher.id,
+      after: { name: teacher.name, loggedInAt: new Date().toISOString() },
+    });
+
+    revalidatePath('/teacher');
+    return { success: true };
+  } catch (err: any) {
+    console.error('teacherLoginAction error:', err);
+    return { success: false, error: err.message || 'Login failed. Please verify your PIN.' };
   }
-
-  if (!teacher.active) {
-    throw new Error('This faculty account is deactivated. Please contact the administrator.');
-  }
-
-  if (teacher.pin !== pin.trim()) {
-    throw new Error('Incorrect PIN. The default PIN is 1234. Please try again.');
-  }
-
-  // Create session
-  await createSession({
-    userId: teacher.id,
-    role: 'faculty',
-    name: teacher.name,
-    teacherId: teacher.id,
-  });
-
-  await logAudit({
-    action: 'TEACHER_LOGIN',
-    entity: 'teachers',
-    entityId: teacher.id,
-    after: { name: teacher.name, loggedInAt: new Date().toISOString() },
-  });
-
-  revalidatePath('/teacher');
-  return { success: true };
 }
 
-export async function adminLoginAction(password: string) {
-  if (!password) {
-    throw new Error('Please enter the Director Master Password.');
+export async function adminLoginAction(password: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!password) {
+      return { success: false, error: 'Please enter the Director Master Password.' };
+    }
+
+    const masterPassword = process.env.ADMIN_MASTER_PASSWORD || 'AbhigyanAdmin2026!';
+    if (password.trim() !== masterPassword) {
+      return { success: false, error: 'Incorrect Director Master Password. Access denied.' };
+    }
+
+    // Create admin session
+    await createSession({
+      userId: 'admin-director-root',
+      role: 'admin',
+      name: 'Academy Director',
+    });
+
+    await logAudit({
+      action: 'ADMIN_LOGIN',
+      entity: 'admin',
+      entityId: 'admin-director-root',
+      after: { loggedInAt: new Date().toISOString() },
+    });
+
+    revalidatePath('/admin');
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (err: any) {
+    console.error('adminLoginAction error:', err);
+    return { success: false, error: err.message || 'Access denied. Incorrect master password.' };
   }
-
-  const masterPassword = process.env.ADMIN_MASTER_PASSWORD || 'AbhigyanAdmin2026!';
-  if (password.trim() !== masterPassword) {
-    throw new Error('Incorrect Director Master Password. Access denied.');
-  }
-
-  // Create admin session
-  await createSession({
-    userId: 'admin-director-root',
-    role: 'admin',
-    name: 'Academy Director',
-  });
-
-  await logAudit({
-    action: 'ADMIN_LOGIN',
-    entity: 'admin',
-    entityId: 'admin-director-root',
-    after: { loggedInAt: new Date().toISOString() },
-  });
-
-  revalidatePath('/admin');
-  revalidatePath('/dashboard');
-  return { success: true };
 }
 
 export async function logoutAction() {
