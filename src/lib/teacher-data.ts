@@ -108,17 +108,37 @@ export async function getTeacherDashboardData(
   const courseSettingsList = await pb.collection('course_settings').getFullList();
   const settingsMap = new Map(courseSettingsList.map((s) => [s.course, s]));
 
+  // Batch fetch topics and entries for all assigned subjects in one round-trip
+  const subjectIds = Array.from(subjectMap.keys());
+  const subjectFilter = subjectIds.map((id) => `subject = "${id}"`).join(' || ');
+
+  const [allTopics, allEntries] = await Promise.all([
+    pb.collection('topics').getFullList({
+      filter: subjectFilter,
+      sort: 'seq_no',
+    }),
+    pb.collection('entries').getFullList({
+      filter: `(${subjectFilter}) && review_status != "rejected" && review_status != "VIOLATION"`,
+    }),
+  ]);
+
+  const topicsBySubject = new Map<string, any[]>();
+  for (const t of allTopics) {
+    if (!topicsBySubject.has(t.subject)) topicsBySubject.set(t.subject, []);
+    topicsBySubject.get(t.subject)!.push(t);
+  }
+
+  const entriesBySubject = new Map<string, any[]>();
+  for (const ent of allEntries) {
+    if (!entriesBySubject.has(ent.subject)) entriesBySubject.set(ent.subject, []);
+    entriesBySubject.get(ent.subject)!.push(ent);
+  }
+
   const subjects: TeacherAssignedSubject[] = [];
 
   for (const [sId, { sub, course }] of subjectMap.entries()) {
-    const allTopics = await pb.collection('topics').getFullList({
-      filter: `subject = "${sId}"`,
-      sort: 'seq_no',
-    });
-
-    const entries = await pb.collection('entries').getFullList({
-      filter: `subject = "${sId}" && review_status != "rejected" && review_status != "VIOLATION"`,
-    });
+    const subTopics = topicsBySubject.get(sId) || [];
+    const entries = entriesBySubject.get(sId) || [];
 
     const enrolled = courseEnrollmentCount.get(course.id) || 10;
     const thresholdSetting = settingsMap.get(course.id)?.confirmation_threshold || 5;
@@ -143,7 +163,7 @@ export async function getTeacherDashboardData(
     }
 
     let coveredCount = 0;
-    for (const t of allTopics) {
+    for (const t of subTopics) {
       const stat = topicStats.get(t.id);
       const isCovered =
         stat?.approved ||
@@ -151,7 +171,7 @@ export async function getTeacherDashboardData(
       if (isCovered) coveredCount++;
     }
 
-    const total = allTopics.length;
+    const total = subTopics.length;
     const pct = total > 0 ? Math.round((coveredCount / total) * 100) : 0;
 
     subjects.push({
@@ -170,17 +190,11 @@ export async function getTeacherDashboardData(
   const selectedSubjectId = activeSubject?.subject_id || '';
   const selectedCourseId = activeSubject?.course_id || '';
 
-  // 3. Fetch detailed topic line items for selected subject
+  // 3. Detailed topic line items for selected subject (derived from batch results)
   let topics: TeacherTopicItem[] = [];
   if (selectedSubjectId) {
-    const rawTopics = await pb.collection('topics').getFullList({
-      filter: `subject = "${selectedSubjectId}"`,
-      sort: 'seq_no',
-    });
-
-    const entries = await pb.collection('entries').getFullList({
-      filter: `subject = "${selectedSubjectId}" && review_status != "rejected" && review_status != "VIOLATION"`,
-    });
+    const rawTopics = topicsBySubject.get(selectedSubjectId) || [];
+    const entries = entriesBySubject.get(selectedSubjectId) || [];
 
     const enrolled = courseEnrollmentCount.get(selectedCourseId) || 10;
     const thresholdSetting = settingsMap.get(selectedCourseId)?.confirmation_threshold || 5;
