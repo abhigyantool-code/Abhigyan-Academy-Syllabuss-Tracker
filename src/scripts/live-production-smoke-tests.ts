@@ -87,7 +87,7 @@ export async function runProductionSmokeTests(): Promise<SmokeTestResults> {
       throw new Error('Could not resolve adminLoginAction ID from client chunks.');
     }
 
-    const masterPass = process.env.ADMIN_MASTER_PASSWORD || 'AbhigyanAdmin2026!';
+    const masterPass = 'AbhigyanAdmin2026!';
     const loginRes = await fetch(`${PROD_URL}/login`, {
       method: 'POST',
       headers: {
