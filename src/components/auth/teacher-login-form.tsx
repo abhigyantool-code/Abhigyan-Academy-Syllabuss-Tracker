@@ -26,11 +26,12 @@ interface TeacherItem {
 interface TeacherLoginFormProps {
   teachers: TeacherItem[];
   initialTab?: 'faculty' | 'admin' | 'student';
+  portalMode?: 'faculty' | 'admin' | 'student';
 }
 
-export function TeacherLoginForm({ teachers, initialTab = 'faculty' }: TeacherLoginFormProps) {
+export function TeacherLoginForm({ teachers, initialTab = 'faculty', portalMode }: TeacherLoginFormProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'faculty' | 'admin' | 'student'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'faculty' | 'admin' | 'student'>(portalMode || initialTab);
 
   // Faculty form state
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teachers[0]?.id || '');
@@ -133,56 +134,58 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty' }: TeacherLo
 
   return (
     <div className="space-y-6">
-      {/* Tab Switcher */}
-      <div className="grid grid-cols-3 p-1 bg-zinc-950/80 border border-zinc-800 rounded-2xl gap-1">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('faculty');
-            setError(null);
-          }}
-          className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'faculty'
-              ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Faculty</span>
-        </button>
+      {/* Tab Switcher - Only visible if portalMode is not restricted */}
+      {!portalMode && (
+        <div className="grid grid-cols-3 p-1 bg-zinc-950/80 border border-zinc-800 rounded-2xl gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('faculty');
+              setError(null);
+            }}
+            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'faculty'
+                ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Faculty</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('student');
-            setError(null);
-          }}
-          className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'student'
-              ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Student</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('student');
+              setError(null);
+            }}
+            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'student'
+                ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Student</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab('admin');
-            setError(null);
-          }}
-          className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'admin'
-              ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5 text-violet-400" />
-          <span>Director</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('admin');
+              setError(null);
+            }}
+            className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'admin'
+                ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5 text-violet-400" />
+            <span>Director</span>
+          </button>
+        </div>
+      )}
 
       {/* Error Alert Box */}
       {error && (

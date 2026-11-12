@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { TeacherDashboardData } from '@/lib/teacher-data';
 import { logoutAction, teacherEndorseTopicAction, updateTeacherPinAction } from '@/app/actions/auth-actions';
@@ -19,6 +20,7 @@ import {
   AlertCircle,
   Loader2,
   Search,
+  LayoutDashboard,
 } from 'lucide-react';
 
 interface TeacherPortalClientProps {
@@ -114,6 +116,15 @@ export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientPr
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span className="text-xs font-bold text-zinc-200">{teacherName}</span>
             </div>
+
+            <Link
+              href="/dashboard"
+              title="View Executive Performance Dashboard"
+              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors text-xs flex items-center gap-1.5"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden md:inline">Executive Dashboard</span>
+            </Link>
 
             <button
               onClick={() => setShowPinModal(true)}

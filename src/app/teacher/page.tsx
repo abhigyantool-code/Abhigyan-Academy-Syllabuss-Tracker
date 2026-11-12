@@ -20,7 +20,7 @@ export default async function TeacherPage({ searchParams }: TeacherPageProps) {
 
   // If no faculty session, redirect to login
   if (!session || session.role !== 'faculty' || !session.teacherId) {
-    redirect('/login');
+    redirect('/teacher/login');
   }
 
   const resolvedParams = await searchParams;
@@ -29,7 +29,7 @@ export default async function TeacherPage({ searchParams }: TeacherPageProps) {
   const data = await getTeacherDashboardData(session.teacherId, subjectId);
 
   if (!data) {
-    redirect('/login');
+    redirect('/teacher/login');
   }
 
   return <TeacherPortalClient data={data} teacherName={session.name} />;

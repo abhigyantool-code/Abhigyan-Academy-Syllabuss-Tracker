@@ -16,13 +16,24 @@ export interface AccessResult {
   reason?: string;
 }
 
-export async function requireAccess(area: AccessArea | AccessArea[]): Promise<AccessResult> {
-  const session = await getSession();
+export interface AccessEvaluation {
+  allowed: boolean;
+  redirectUrl?: string;
+}
 
+/**
+ * Pure authorization evaluation policy matrix.
+ * Evaluates whether a session role has permission for a specific area
+ * and returns the appropriate portal login redirect destination if unauthorized.
+ */
+export function evaluateAccess(
+  area: AccessArea | AccessArea[],
+  session: { role: string; userId?: string; teacherId?: string; studentId?: string } | null
+): AccessEvaluation {
   // Handle array of allowed areas/roles (BUG-035 Fix: Prevent fallthrough bypass)
   if (Array.isArray(area)) {
     if (!session) {
-      redirect('/login');
+      return { allowed: false, redirectUrl: '/login' };
     }
     const isAllowed = area.some((a) => {
       if (a === 'admin' && session.role === 'admin') return true;
@@ -34,90 +45,56 @@ export async function requireAccess(area: AccessArea | AccessArea[]): Promise<Ac
     });
 
     if (!isAllowed) {
-      redirect('/login');
+      return { allowed: false, redirectUrl: '/login' };
     }
 
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-        teacherId: session.teacherId,
-        studentId: session.studentId,
-      },
-    };
+    return { allowed: true };
   }
 
   // 1. Admin Area: Requires authenticated Director/Admin session
   if (area === 'admin') {
     if (!session || session.role !== 'admin') {
-      redirect('/login?from=admin');
+      return { allowed: false, redirectUrl: '/admin/login' };
     }
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-      },
-    };
+    return { allowed: true };
   }
 
   // 2. Faculty Workspace (/teacher): Requires Faculty or Admin session
   if (area === 'faculty') {
     if (!session || (session.role !== 'faculty' && session.role !== 'admin')) {
-      redirect('/login?from=teacher');
+      return { allowed: false, redirectUrl: '/teacher/login' };
     }
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-        teacherId: session.teacherId,
-      },
-    };
+    return { allowed: true };
   }
 
   // 3. Executive Dashboard (/dashboard): Accessible to Faculty and Admin
   if (area === 'dashboard') {
     if (!session || (session.role !== 'faculty' && session.role !== 'admin')) {
-      redirect('/login?from=dashboard');
+      return { allowed: false, redirectUrl: '/teacher/login' };
     }
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-        teacherId: session.teacherId,
-      },
-    };
+    return { allowed: true };
   }
 
   // 4. Student Area (/student): Accessible to Students and Admin
   if (area === 'student') {
     if (!session || (session.role !== 'student' && session.role !== 'admin')) {
-      redirect('/login?from=student');
+      return { allowed: false, redirectUrl: '/student/login' };
     }
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-        studentId: session.studentId,
-      },
-    };
+    return { allowed: true };
   }
 
   // 5. Student Submission (/submit): Open entry form, protected by 4-digit PIN + active hours
+  return { allowed: true };
+}
+
+export async function requireAccess(area: AccessArea | AccessArea[]): Promise<AccessResult> {
+  const session = await getSession();
+  const evaluation = evaluateAccess(area, session);
+
+  if (!evaluation.allowed) {
+    redirect(evaluation.redirectUrl || '/login');
+  }
+
   return {
     allowed: true,
     area,

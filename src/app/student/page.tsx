@@ -48,8 +48,8 @@ export default async function StudentDashboardPage() {
       <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-4">
         <div className="text-center space-y-4">
           <p className="text-zinc-400">Student profile could not be loaded.</p>
-          <Link href="/login" className="text-indigo-400 hover:underline text-sm">
-            Return to Login
+          <Link href="/student/login" className="text-emerald-400 hover:underline text-sm">
+            Return to Student Login
           </Link>
         </div>
       </div>

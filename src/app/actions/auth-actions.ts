@@ -174,6 +174,7 @@ export async function adminLoginAction(password: string): Promise<{ success: boo
 
 export async function logoutAction() {
   const session = await getSession();
+  const role = session?.role;
   if (session) {
     await logAudit({
       action: 'LOGOUT',
@@ -182,7 +183,15 @@ export async function logoutAction() {
     });
   }
   await destroySession();
-  redirect('/login');
+  if (role === 'student') {
+    redirect('/student/login');
+  } else if (role === 'admin') {
+    redirect('/admin/login');
+  } else if (role === 'faculty') {
+    redirect('/teacher/login');
+  } else {
+    redirect('/login');
+  }
 }
 
 export async function teacherEndorseTopicAction(topicId: string, subjectId: string, courseId: string, remarks?: string) {
