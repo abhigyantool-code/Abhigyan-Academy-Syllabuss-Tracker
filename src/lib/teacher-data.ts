@@ -166,10 +166,10 @@ export async function getTeacherDashboardData(
         topicStats.set(ent.topic, { covered: new Set(), partial: new Set(), approved: false });
       }
       const stat = topicStats.get(ent.topic)!;
-      if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+      if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
         stat.covered.add(ent.student);
       }
-      if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+      if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
         stat.partial.add(ent.student);
       }
       if (ent.review_status === 'approved' && ent.status === 'covered') {
@@ -183,7 +183,7 @@ export async function getTeacherDashboardData(
         topicStats.set(tr.topic, { covered: new Set(), partial: new Set(), approved: false });
       }
       const stat = topicStats.get(tr.topic)!;
-      if (tr.status === 'completed') {
+      if (tr.status === 'completed' && !tr.is_voided) {
         stat.approved = true;
       }
     }
@@ -233,10 +233,10 @@ export async function getTeacherDashboardData(
         topicStats.set(ent.topic, { covered: new Set(), partial: new Set(), approved: false });
       }
       const stat = topicStats.get(ent.topic)!;
-      if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+      if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
         stat.covered.add(ent.student);
       }
-      if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+      if (ent.status === 'partial' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
         stat.partial.add(ent.student);
       }
       if (ent.review_status === 'approved' && ent.status === 'covered') {
@@ -250,7 +250,7 @@ export async function getTeacherDashboardData(
         topicStats.set(tr.topic, { covered: new Set(), partial: new Set(), approved: false });
       }
       const stat = topicStats.get(tr.topic)!;
-      if (tr.status === 'completed') {
+      if (tr.status === 'completed' && !tr.is_voided) {
         stat.approved = true;
       }
     }

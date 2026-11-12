@@ -214,34 +214,34 @@ export async function teacherEndorseTopicAction(topicId: string, subjectId: stri
         status: 'covered',
       });
     }
-  } else {
-    // 3. If no student submissions exist, write faculty instruction log to teaching_records (BUG-009 & BUG-012)
-    const existingTRs = await pb.collection('teaching_records').getFullList({
-      filter: `topic="${topicId}" && teacher="${teacherId}" && is_voided = false`,
+  }
+
+  // 3. Persist faculty teaching record to teaching_records (BUG-009 & BUG-012)
+  const existingTRs = await pb.collection('teaching_records').getFullList({
+    filter: `topic="${topicId}" && teacher="${teacherId}" && is_voided = false`,
+  });
+
+  if (existingTRs.length === 0) {
+    const sessionId = `TR_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const createdRecord = await pb.collection('teaching_records').create({
+      session_id: sessionId,
+      session_number: 1,
+      teacher: teacherId,
+      course: courseId,
+      subject: subjectId,
+      topic: topicId,
+      session_date: today,
+      session_type: 'lecture',
+      status: 'completed',
+      duration_minutes: 60,
+      remarks: remarks ? `[Faculty Endorsed] ${remarks}` : '[Faculty Endorsed directly from Teacher Portal]',
+      is_voided: false,
+      version: 1,
+      source: 'teacher_portal',
     });
 
-    if (existingTRs.length === 0) {
-      const sessionId = `TR_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const createdRecord = await pb.collection('teaching_records').create({
-        session_id: sessionId,
-        session_number: 1,
-        teacher: teacherId,
-        course: courseId,
-        subject: subjectId,
-        topic: topicId,
-        session_date: today,
-        session_type: 'lecture',
-        status: 'completed',
-        duration_minutes: 60,
-        remarks: remarks ? `[Faculty Endorsed] ${remarks}` : '[Faculty Endorsed directly from Teacher Portal]',
-        is_voided: false,
-        version: 1,
-        source: 'teacher_portal',
-      });
-
-      if (!createdRecord || !createdRecord.id) {
-        throw new Error('Failed to persist faculty endorsement in teaching_records.');
-      }
+    if (!createdRecord || !createdRecord.id) {
+      throw new Error('Failed to persist faculty endorsement in teaching_records.');
     }
   }
 
@@ -453,6 +453,7 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
       entityId: session.teacherId,
     });
 
+    revalidatePath('/teacher');
     return { success: true };
   } catch (err: any) {
     if (inFlightReserved) {

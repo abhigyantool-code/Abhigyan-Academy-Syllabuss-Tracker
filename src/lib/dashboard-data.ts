@@ -212,7 +212,7 @@ export async function getDashboardData(courseId?: string) {
       });
     }
     const stat = topicStatsMap.get(tr.topic)!;
-    if (tr.status === 'completed') {
+    if (tr.status === 'completed' && !tr.is_voided) {
       stat.approved = true; // Faculty endorsement directly fulfills coverage
     }
     if (tr.session_date) {
@@ -323,6 +323,11 @@ export async function getDashboardData(courseId?: string) {
       distinctClasses.add(`${ent.teacher}_${ent.class_date}`);
     }
   }
+  for (const tr of courseTeachingRecords) {
+    if (tr.teacher && tr.session_date && tr.status === 'completed' && !tr.is_voided) {
+      distinctClasses.add(`${tr.teacher}_${tr.session_date}`);
+    }
+  }
 
   const overviewMetrics: OverviewMetrics = {
     totalTopics,
@@ -345,7 +350,8 @@ export async function getDashboardData(courseId?: string) {
   const teacherScorecard: TeacherScorecardItem[] = [];
   for (const tea of teachers) {
     const teaEntries = courseEntries.filter((e) => e.teacher === tea.id);
-    if (teaEntries.length === 0) continue;
+    const teaTeachingRecs = courseTeachingRecords.filter((t) => t.teacher === tea.id && t.status === 'completed' && !t.is_voided);
+    if (teaEntries.length === 0 && teaTeachingRecs.length === 0) continue;
 
     const coveredTopicIds = new Set<string>();
     let totalLagDays = 0;
@@ -378,9 +384,38 @@ export async function getDashboardData(courseId?: string) {
       }
     }
 
+    for (const tr of teaTeachingRecs) {
+      const topicObj = topics.find((t) => t.id === tr.topic);
+      const isTopicCovered = topicProgress.find((tp) => tp.topic_id === tr.topic)?.status === 'covered';
+
+      if (isTopicCovered) {
+        coveredTopicIds.add(tr.topic);
+        if (topicObj?.target_date && tr.session_date) {
+          const tDate = new Date(topicObj.target_date.split(' ')[0]).getTime();
+          const cDate = new Date(tr.session_date).getTime();
+          const diffDays = Math.round((cDate - tDate) / (1000 * 60 * 60 * 24));
+          totalLagDays += diffDays;
+          lagCount++;
+        }
+      }
+
+      if (tr.session_date) {
+        if (!lastClassDate || tr.session_date > lastClassDate) {
+          lastClassDate = tr.session_date;
+        }
+        if (tr.session_date.startsWith(currentMonthPrefix)) {
+          monthClasses.add(`${tr.session_date}_${tr.subject}`);
+        }
+      }
+    }
+
     const teaSubjects = new Set<string>();
     for (const ent of teaEntries) {
       const sName = subjectNameMap.get(ent.subject);
+      if (sName) teaSubjects.add(sName);
+    }
+    for (const tr of teaTeachingRecs) {
+      const sName = subjectNameMap.get(tr.subject);
       if (sName) teaSubjects.add(sName);
     }
 

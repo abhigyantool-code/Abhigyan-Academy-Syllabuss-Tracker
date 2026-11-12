@@ -87,7 +87,10 @@ export async function runProductionSmokeTests(): Promise<SmokeTestResults> {
       throw new Error('Could not resolve adminLoginAction ID from client chunks.');
     }
 
-    const masterPass = 'AbhigyanAdmin2026!';
+    const masterPass = process.env.ADMIN_MASTER_PASSWORD;
+    if (!masterPass) {
+      throw new Error('ADMIN_MASTER_PASSWORD must be provided in environment variables to run smoke tests.');
+    }
     const loginRes = await fetch(`${PROD_URL}/login`, {
       method: 'POST',
       headers: {
@@ -223,6 +226,14 @@ export async function runProductionSmokeTests(): Promise<SmokeTestResults> {
       if (!dualCheck.valid) {
         throw new Error('Dual PIN verification failed against teacher account.');
       }
+
+      // Non-destructive live write check to prove PocketBase accepts pin + pin_hash update (NEW-03)
+      const currentPin = testTeacher.pin;
+      const currentPinHash = testTeacher.pin_hash || null;
+      await pb.collection('teachers').update(testTeacher.id, {
+        pin: currentPin,
+        pin_hash: currentPinHash,
+      });
     }
 
     results.teacherPinUpdate = true;

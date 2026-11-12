@@ -50,16 +50,16 @@ export async function analyzeMisuseFlags(params: {
   try {
     const pb = await getPbClient();
 
-    // 1. Sequence Jump Check (BUG-014: Include auto-approved entries and teaching records)
+    // 1. Sequence Jump Check (BUG-014: Include auto-approved entries, CLEARED entries, and completed teaching records)
     const coveredEntriesPromise = pb.collection('entries').getFullList({
-      filter: `subject = "${subjectId}" && (status = "covered" || status = "revision") && (review_status = "approved" || review_status = "auto")`,
+      filter: `subject = "${subjectId}" && (status = "covered" || status = "revision") && (review_status = "approved" || review_status = "auto" || review_status = "CLEARED")`,
       fields: 'topic',
     });
 
     const teachingRecordsPromise = pb
       .collection('teaching_records')
       .getFullList({
-        filter: `subject = "${subjectId}" && is_voided = false`,
+        filter: `subject = "${subjectId}" && status = "completed" && is_voided = false`,
         fields: 'topic',
       })
       .catch(() => [] as any[]);

@@ -241,5 +241,48 @@ describe('Production Features — PIN Management & Health Check', () => {
 
       assert.strictEqual(status, 'not_started');
     });
+
+    it('should count CLEARED student submissions as valid covered confirmations', () => {
+      const studentSubmissions = [
+        { student: 'student_genuine_1', status: 'covered', review_status: 'auto' },
+        { student: 'student_genuine_2', status: 'covered', review_status: 'CLEARED' },
+      ];
+
+      const topicStat = {
+        covered: new Set<string>(),
+        partial: new Set<string>(),
+        approved: false,
+      };
+
+      for (const ent of studentSubmissions) {
+        if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved' || ent.review_status === 'CLEARED')) {
+          topicStat.covered.add(ent.student);
+        }
+      }
+
+      // Assert both auto and CLEARED count towards student covered confirmations
+      assert.strictEqual(topicStat.covered.size, 2);
+    });
+
+    it('should ignore non-completed teaching records (e.g. cancelled, in_progress)', () => {
+      const teachingRecords = [
+        { topic: 'topic_103', status: 'cancelled', is_voided: false },
+        { topic: 'topic_103', status: 'in_progress', is_voided: false },
+      ];
+
+      const topicStat = {
+        covered: new Set<string>(),
+        partial: new Set<string>(),
+        approved: false,
+      };
+
+      for (const tr of teachingRecords) {
+        if (tr.status === 'completed' && !tr.is_voided) {
+          topicStat.approved = true;
+        }
+      }
+
+      assert.strictEqual(topicStat.approved, false);
+    });
   });
 });
