@@ -136,7 +136,7 @@ export async function adminLoginAction(password: string): Promise<{ success: boo
       return { success: false, error: adminRateCheck.error || 'Too many failed admin login attempts. Please wait.' };
     }
 
-    const masterPassword = process.env.ADMIN_MASTER_PASSWORD || 'AbhigyanAdmin2026!';
+    const masterPassword = process.env.ADMIN_MASTER_PASSWORD;
     if (!masterPassword) {
       console.error('FATAL: ADMIN_MASTER_PASSWORD is not configured in environment variables.');
       return { success: false, error: 'Authentication service configuration error. Please contact administrator.' };
@@ -215,10 +215,14 @@ export async function teacherEndorseTopicAction(topicId: string, subjectId: stri
       });
     }
   } else {
-    // 3. If no student submissions exist, write faculty instruction log to teaching_records (BUG-009 Fix: Never fabricate student entries)
-    const sessionId = `TR_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    try {
-      await pb.collection('teaching_records').create({
+    // 3. If no student submissions exist, write faculty instruction log to teaching_records (BUG-009 & BUG-012)
+    const existingTRs = await pb.collection('teaching_records').getFullList({
+      filter: `topic="${topicId}" && teacher="${teacherId}" && is_voided = false`,
+    });
+
+    if (existingTRs.length === 0) {
+      const sessionId = `TR_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const createdRecord = await pb.collection('teaching_records').create({
         session_id: sessionId,
         session_number: 1,
         teacher: teacherId,
@@ -234,9 +238,10 @@ export async function teacherEndorseTopicAction(topicId: string, subjectId: stri
         version: 1,
         source: 'teacher_portal',
       });
-    } catch (trErr: any) {
-      console.warn('teaching_records write deferred (awaiting schema deployment):', trErr.message);
-      // Fallback: Do not corrupt student data in entries table
+
+      if (!createdRecord || !createdRecord.id) {
+        throw new Error('Failed to persist faculty endorsement in teaching_records.');
+      }
     }
   }
 

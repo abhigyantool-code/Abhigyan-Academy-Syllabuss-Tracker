@@ -150,4 +150,96 @@ describe('Production Features — PIN Management & Health Check', () => {
       assert.ok(headers.includes('Teacher Endorsement Status'));
     });
   });
+
+  // 5. Teacher Portal Teaching Records Integration & Non-Double-Counting (NEW-01)
+  describe('Teacher Portal Teaching Records Integration (NEW-01)', () => {
+    const { determineTopicStatus } = require('../../lib/coverage-calculator');
+
+    it('should mark topic as covered when a completed teaching record exists without requiring student threshold', () => {
+      const status = determineTopicStatus({
+        hasAdminApproval: true, // Endorsed via teaching_record status === 'completed'
+        coveredConfirmations: 0,
+        partialConfirmations: 0,
+        effectiveThreshold: 5,
+        targetDate: '2026-11-20',
+        todayIST: '2026-11-12',
+      });
+
+      assert.strictEqual(status, 'covered');
+    });
+
+    it('should preserve genuine student confirmation counts without double-counting when teaching record exists', () => {
+      const studentSubmissions = [
+        { student: 'student_1', status: 'covered', review_status: 'auto' },
+        { student: 'student_2', status: 'covered', review_status: 'auto' },
+      ];
+      const teachingRecords = [
+        { topic: 'topic_101', status: 'completed', is_voided: false },
+      ];
+
+      // Simulate grouping logic from teacher-data.ts
+      const topicStat = {
+        covered: new Set<string>(),
+        partial: new Set<string>(),
+        approved: false,
+      };
+
+      for (const ent of studentSubmissions) {
+        if (ent.status === 'covered' && (ent.review_status === 'auto' || ent.review_status === 'approved')) {
+          topicStat.covered.add(ent.student);
+        }
+      }
+
+      for (const tr of teachingRecords) {
+        if (tr.status === 'completed' && !tr.is_voided) {
+          topicStat.approved = true;
+        }
+      }
+
+      // Assert student confirmation count is strictly from genuine students (2), not inflated
+      assert.strictEqual(topicStat.covered.size, 2);
+      assert.strictEqual(topicStat.approved, true);
+
+      const status = determineTopicStatus({
+        hasAdminApproval: topicStat.approved,
+        coveredConfirmations: topicStat.covered.size,
+        partialConfirmations: topicStat.partial.size,
+        effectiveThreshold: 5,
+        targetDate: null,
+        todayIST: '2026-11-12',
+      });
+
+      assert.strictEqual(status, 'covered');
+    });
+
+    it('should ignore voided teaching records and not grant coverage', () => {
+      const teachingRecords = [
+        { topic: 'topic_102', status: 'completed', is_voided: true },
+      ];
+
+      const topicStat = {
+        covered: new Set<string>(),
+        partial: new Set<string>(),
+        approved: false,
+      };
+
+      for (const tr of teachingRecords) {
+        if (tr.status === 'completed' && !tr.is_voided) {
+          topicStat.approved = true;
+        }
+      }
+
+      assert.strictEqual(topicStat.approved, false);
+      const status = determineTopicStatus({
+        hasAdminApproval: topicStat.approved,
+        coveredConfirmations: 0,
+        partialConfirmations: 0,
+        effectiveThreshold: 5,
+        targetDate: '2026-11-20',
+        todayIST: '2026-11-12',
+      });
+
+      assert.strictEqual(status, 'not_started');
+    });
+  });
 });

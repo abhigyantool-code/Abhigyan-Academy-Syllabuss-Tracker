@@ -108,11 +108,18 @@ export async function getTeacherDashboardData(
   const courseSettingsList = await pb.collection('course_settings').getFullList();
   const settingsMap = new Map(courseSettingsList.map((s) => [s.course, s]));
 
-  // Batch fetch topics and entries for all assigned subjects in one round-trip
+  // Batch fetch topics and entries for all assigned subjects in one round-trip (NEW-01: include teaching_records)
   const subjectIds = Array.from(subjectMap.keys());
   const subjectFilter = subjectIds.map((id) => `subject = "${id}"`).join(' || ');
 
-  const [allTopics, allEntries] = await Promise.all([
+  const teachingRecordsPromise = pb
+    .collection('teaching_records')
+    .getFullList({
+      filter: `(${subjectFilter}) && is_voided = false`,
+    })
+    .catch(() => [] as any[]);
+
+  const [allTopics, allEntries, allTeachingRecords] = await Promise.all([
     pb.collection('topics').getFullList({
       filter: subjectFilter,
       sort: 'seq_no',
@@ -120,6 +127,7 @@ export async function getTeacherDashboardData(
     pb.collection('entries').getFullList({
       filter: `(${subjectFilter}) && review_status != "rejected" && review_status != "VIOLATION"`,
     }),
+    teachingRecordsPromise,
   ]);
 
   const topicsBySubject = new Map<string, any[]>();
@@ -134,11 +142,18 @@ export async function getTeacherDashboardData(
     entriesBySubject.get(ent.subject)!.push(ent);
   }
 
+  const teachingRecordsBySubject = new Map<string, any[]>();
+  for (const tr of allTeachingRecords) {
+    if (!teachingRecordsBySubject.has(tr.subject)) teachingRecordsBySubject.set(tr.subject, []);
+    teachingRecordsBySubject.get(tr.subject)!.push(tr);
+  }
+
   const subjects: TeacherAssignedSubject[] = [];
 
   for (const [sId, { sub, course }] of subjectMap.entries()) {
     const subTopics = topicsBySubject.get(sId) || [];
     const entries = entriesBySubject.get(sId) || [];
+    const teachingRecs = teachingRecordsBySubject.get(sId) || [];
 
     const enrolled = courseEnrollmentCount.get(course.id) || 10;
     const thresholdSetting = settingsMap.get(course.id)?.confirmation_threshold || 5;
@@ -158,6 +173,17 @@ export async function getTeacherDashboardData(
         stat.partial.add(ent.student);
       }
       if (ent.review_status === 'approved' && ent.status === 'covered') {
+        stat.approved = true;
+      }
+    }
+
+    // Integrate teaching_records (NEW-01: Faculty endorsements fulfill topic coverage without double-counting)
+    for (const tr of teachingRecs) {
+      if (!topicStats.has(tr.topic)) {
+        topicStats.set(tr.topic, { covered: new Set(), partial: new Set(), approved: false });
+      }
+      const stat = topicStats.get(tr.topic)!;
+      if (tr.status === 'completed') {
         stat.approved = true;
       }
     }
@@ -195,6 +221,7 @@ export async function getTeacherDashboardData(
   if (selectedSubjectId) {
     const rawTopics = topicsBySubject.get(selectedSubjectId) || [];
     const entries = entriesBySubject.get(selectedSubjectId) || [];
+    const teachingRecs = teachingRecordsBySubject.get(selectedSubjectId) || [];
 
     const enrolled = courseEnrollmentCount.get(selectedCourseId) || 10;
     const thresholdSetting = settingsMap.get(selectedCourseId)?.confirmation_threshold || 5;
@@ -213,6 +240,17 @@ export async function getTeacherDashboardData(
         stat.partial.add(ent.student);
       }
       if (ent.review_status === 'approved' && ent.status === 'covered') {
+        stat.approved = true;
+      }
+    }
+
+    // Integrate teaching_records (NEW-01: Faculty endorsements directly fulfill coverage)
+    for (const tr of teachingRecs) {
+      if (!topicStats.has(tr.topic)) {
+        topicStats.set(tr.topic, { covered: new Set(), partial: new Set(), approved: false });
+      }
+      const stat = topicStats.get(tr.topic)!;
+      if (tr.status === 'completed') {
         stat.approved = true;
       }
     }

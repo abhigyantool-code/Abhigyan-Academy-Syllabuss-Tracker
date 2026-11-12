@@ -59,7 +59,7 @@ export async function analyzeMisuseFlags(params: {
     const teachingRecordsPromise = pb
       .collection('teaching_records')
       .getFullList({
-        filter: `subject = "${subjectId}" && voided = false`,
+        filter: `subject = "${subjectId}" && is_voided = false`,
         fields: 'topic',
       })
       .catch(() => [] as any[]);
