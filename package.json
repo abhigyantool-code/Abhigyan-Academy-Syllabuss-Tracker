@@ -7,13 +7,9 @@
     "build": "next build",
     "start": "next start -p 3005",
     "lint": "eslint",
-    "db:migrate": "tsx src/scripts/migrate.ts",
-    "db:seed": "tsx src/scripts/seed.ts",
-    "db:setup": "tsx src/scripts/migrate.ts && tsx src/scripts/seed.ts",
     "pb:setup": "tsx src/scripts/pocketbase-setup.ts",
     "pb:backup": "tsx src/scripts/pocketbase-backup.ts",
     "test:unit": "tsx --test src/tests/unit/*.test.ts",
-    "test:api": "tsx src/scripts/test-api.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

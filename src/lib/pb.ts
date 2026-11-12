@@ -2,8 +2,8 @@ import PocketBase from 'pocketbase';
 
 const rawUrl = process.env.POCKETBASE_URL || 'https://stracker.abhigyanintelligence.cloud/_/';
 const PB_URL = rawUrl.replace(/\/_\/?$/, '').replace(/\/+$/, '');
-const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'abhigyantool2@gmail.com';
-const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD || 'FfZjw97Mpp9gSwp@spb';
+const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || '';
+const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD || '';
 
 let pbInstance: PocketBase | null = null;
 let authPromise: Promise<PocketBase> | null = null;
@@ -48,10 +48,12 @@ export async function getPbClient(): Promise<PocketBase> {
       }
 
       if (!pbInstance.authStore.isValid) {
-        if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+        const adminEmail = process.env.PB_ADMIN_EMAIL || ADMIN_EMAIL;
+        const adminPassword = process.env.PB_ADMIN_PASSWORD || ADMIN_PASSWORD;
+        if (!adminEmail || !adminPassword) {
           throw new Error('PocketBase credentials missing: please set PB_ADMIN_EMAIL and PB_ADMIN_PASSWORD in environment.');
         }
-        await pbInstance.collection('_superusers').authWithPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
+        await pbInstance.collection('_superusers').authWithPassword(adminEmail, adminPassword);
       }
 
       return pbInstance;
