@@ -122,15 +122,8 @@ export async function getDashboardData(courseId?: string) {
   const configuredThreshold = settingsList[0]?.confirmation_threshold || 5;
   const effectiveThreshold = computeEffectiveThreshold(configuredThreshold, enrolledCount);
 
-  // 2. Fetch Subjects & Topics for this course (BUG-036: Include teaching_records)
-  const teachingRecordsPromise = pb
-    .collection('teaching_records')
-    .getFullList({
-      filter: `course = "${cId}" && is_voided = false`,
-    })
-    .catch(() => [] as any[]);
-
-  const [subjects, topics, courseEntries, teacherSubjects, courseTeachingRecords] = await Promise.all([
+  // 2. Fetch Subjects & Topics for this course
+  const [subjects, topics, courseEntries, teacherSubjects] = await Promise.all([
     pb.collection('subjects').getFullList({ filter: `course = "${cId}"`, sort: 'sort_order' }),
     pb.collection('topics').getFullList({
       filter: `subject.course = "${cId}"`,
@@ -143,7 +136,6 @@ export async function getDashboardData(courseId?: string) {
       filter: `subject.course = "${cId}"`,
       expand: 'teacher',
     }),
-    teachingRecordsPromise,
   ]);
 
   // Subject ID to Name map
@@ -197,27 +189,6 @@ export async function getDashboardData(courseId?: string) {
     if (ent.class_date) {
       if (!stat.firstDate || ent.class_date < stat.firstDate) stat.firstDate = ent.class_date;
       if (!stat.lastDate || ent.class_date > stat.lastDate) stat.lastDate = ent.class_date;
-    }
-  }
-
-  // Combine teaching_records (BUG-036: Preserves coverage when entries migrate)
-  for (const tr of courseTeachingRecords) {
-    if (!topicStatsMap.has(tr.topic)) {
-      topicStatsMap.set(tr.topic, {
-        covered: new Set(),
-        partial: new Set(),
-        approved: false,
-        firstDate: null,
-        lastDate: null,
-      });
-    }
-    const stat = topicStatsMap.get(tr.topic)!;
-    if (tr.status === 'completed') {
-      stat.approved = true; // Faculty endorsement directly fulfills coverage
-    }
-    if (tr.session_date) {
-      if (!stat.firstDate || tr.session_date < stat.firstDate) stat.firstDate = tr.session_date;
-      if (!stat.lastDate || tr.session_date > stat.lastDate) stat.lastDate = tr.session_date;
     }
   }
 

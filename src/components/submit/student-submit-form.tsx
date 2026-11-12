@@ -28,7 +28,7 @@ import {
   EyeOff,
   Settings,
 } from 'lucide-react';
-import { changeStudentPinAction, verifyStudentLookupAction } from '@/app/actions/auth-actions';
+import { changeStudentPinAction } from '@/app/actions/auth-actions';
 
 interface StudentSubmitFormProps {
   initialData: {
@@ -48,10 +48,6 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [studentRollNo, setStudentRollNo] = useState<string>('');
-  const [verifiedStudent, setVerifiedStudent] = useState<{ id: string; name: string; roll_no: string } | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [studentPin, setStudentPin] = useState<string>('');
   const [showPin, setShowPin] = useState<boolean>(false);
   const [classCode, setClassCode] = useState<string>('');
@@ -59,7 +55,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
   const [remarks, setRemarks] = useState<string>('');
   const [honeypot, setHoneypot] = useState<string>('');
 
-  // Searchable student combobox state (kept for backwards compatibility if needed)
+  // Searchable student combobox state
   const [studentSearch, setStudentSearch] = useState<string>('');
   const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
 
@@ -166,9 +162,6 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
     setSelectedSubjectId('');
     setSelectedTopicId('');
     setSelectedStudentId('');
-    setStudentRollNo('');
-    setVerifiedStudent(null);
-    setVerifyMessage(null);
     setStudentPin('');
     setStudentSearch('');
     setClassCode('');
@@ -191,33 +184,6 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
     setErrorMessage(null);
   };
 
-  const handleVerifyStudent = async () => {
-    if (!studentRollNo.trim()) {
-      setVerifyMessage('Please enter your roll number first.');
-      return;
-    }
-    if (!studentPin.trim() || studentPin.trim().length < 4) {
-      setVerifyMessage('Please enter your 4-digit PIN first.');
-      return;
-    }
-    setIsVerifying(true);
-    setVerifyMessage(null);
-    try {
-      const res = await verifyStudentLookupAction(selectedCourseId, studentRollNo.trim(), studentPin.trim());
-      if (res.success && res.student) {
-        setVerifiedStudent(res.student);
-        setSelectedStudentId(res.student.id);
-        setVerifyMessage(null);
-      } else {
-        setVerifyMessage(res.error || 'Verification failed. Please check your Roll Number and PIN.');
-      }
-    } catch (err: any) {
-      setVerifyMessage(err.message || 'Verification failed.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,9 +202,8 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
       setErrorMessage('Please select the specific syllabus topic covered.');
       return;
     }
-    const effectiveStudent = verifiedStudent?.id || selectedStudentId || studentRollNo.trim().toUpperCase();
-    if (!effectiveStudent) {
-      setErrorMessage('Please enter your student Roll Number.');
+    if (!selectedStudentId) {
+      setErrorMessage('Please select your student profile / roll number.');
       return;
     }
     if (!studentPin.trim() || studentPin.trim().length < 4) {
@@ -258,7 +223,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
         teacherId: selectedTeacherId,
         subjectId: selectedSubjectId,
         topicId: selectedTopicId,
-        studentId: effectiveStudent,
+        studentId: selectedStudentId,
         pin: studentPin.trim(),
         classCode: classCode.trim().toUpperCase(),
         status,
@@ -292,9 +257,8 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
     e.preventDefault();
     setChangePinMsg(null);
 
-    const studentIdentifier = verifiedStudent?.id || selectedStudentId || studentRollNo.trim().toUpperCase();
-    if (!studentIdentifier) {
-      setChangePinMsg({ text: 'Please enter your student Roll Number first (Step 4).', type: 'error' });
+    if (!selectedStudentId) {
+      setChangePinMsg({ text: 'Please select your student profile first (Step 4).', type: 'error' });
       return;
     }
     if (!/^\d{4,8}$/.test(changePinNewPin)) {
@@ -308,11 +272,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
 
     setChangePinBusy(true);
     try {
-      const res = await changeStudentPinAction(studentIdentifier, changePinCurrentPin, changePinNewPin);
-      if (res && !res.success) {
-        setChangePinMsg({ text: res.error || 'PIN change failed.', type: 'error' });
-        return;
-      }
+      await changeStudentPinAction(selectedStudentId, changePinCurrentPin, changePinNewPin);
       setChangePinMsg({ text: 'PIN changed successfully! Use your new PIN for future logins.', type: 'success' });
       setChangePinCurrentPin('');
       setChangePinNewPin('');
@@ -541,35 +501,36 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             </div>
           </div>
 
-          {/* 4. Student Roll Number (PII Protected - BUG-003) */}
-          <div className="space-y-1.5">
+          {/* 4. Searchable Student Dropdown by Serial Number or Name */}
+          <div className="space-y-1.5 relative">
             <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
                   4
                 </span>
-                Student Roll Number
+                Student (Serial Number / Name)
               </span>
-              <span className="text-[11px] font-normal text-zinc-500">e.g. NDA-01, CDS-05</span>
+              <span className="text-[11px] font-normal text-zinc-500">Enrolled batch students</span>
             </label>
 
-            {verifiedStudent ? (
-              <div className="flex items-center justify-between bg-zinc-950 border border-emerald-500/50 rounded-xl px-3.5 py-2 text-xs">
+            {/* Selected Student Display or Search input */}
+            {selectedStudentObj ? (
+              <div className="flex items-center justify-between bg-zinc-950 border border-indigo-500/50 rounded-xl px-3.5 py-2 text-xs">
                 <div>
-                  <span className="font-bold text-white block">{verifiedStudent.name}</span>
-                  <span className="font-mono text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5 mt-0.5">
-                    <span className="bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">
-                      Verified
+                  <span className="font-bold text-white block">{selectedStudentObj.name}</span>
+                  <span className="font-mono text-[11px] text-indigo-400 font-semibold flex items-center gap-1.5 mt-0.5">
+                    <span className="bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded text-[10px]">
+                      S.No {getSerialDisplay(selectedStudentObj.roll_no)}
                     </span>
-                    <span className="text-zinc-400">({verifiedStudent.roll_no})</span>
+                    <span className="text-zinc-500">({selectedStudentObj.roll_no})</span>
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setVerifiedStudent(null);
                     setSelectedStudentId('');
-                    setStudentRollNo('');
+                    setStudentSearch('');
+                    setIsStudentDropdownOpen(true);
                   }}
                   className="text-xs text-zinc-400 hover:text-white bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800"
                 >
@@ -578,26 +539,53 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
               </div>
             ) : (
               <div className="relative">
-                <User className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  required
-                  placeholder="Enter your Roll Number (e.g. NDA-01, CDS-05)..."
-                  value={studentRollNo}
+                  placeholder="Type serial number (e.g. 1, 2, 15) or student name..."
+                  value={studentSearch}
+                  onFocus={() => setIsStudentDropdownOpen(true)}
                   onChange={(e) => {
-                    setStudentRollNo(e.target.value.toUpperCase());
-                    setVerifiedStudent(null);
-                    setVerifyMessage(null);
+                    setStudentSearch(e.target.value);
+                    setIsStudentDropdownOpen(true);
                   }}
-                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono uppercase"
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-sans"
                 />
+
+                {/* Dropdown list */}
+                {isStudentDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 z-30 mt-1.5 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl max-h-52 overflow-y-auto p-1 divide-y divide-zinc-900">
+                    {filteredStudents.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-zinc-500">
+                        No enrolled student found matching &quot;{studentSearch}&quot;
+                      </div>
+                    ) : (
+                      filteredStudents.map((stu) => (
+                        <button
+                          key={stu.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudentId(stu.id);
+                            setIsStudentDropdownOpen(false);
+                            setStudentSearch('');
+                          }}
+                          className="w-full text-left p-2.5 rounded-xl hover:bg-zinc-900 transition-colors flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-8 h-6 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-mono text-[11px] font-bold flex items-center justify-center">
+                              {getSerialDisplay(stu.roll_no)}
+                            </span>
+                            <span className="font-semibold text-zinc-200">{stu.name}</span>
+                          </div>
+                          <span className="font-mono text-[11px] text-zinc-500">
+                            {stu.roll_no}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-            {verifyMessage && (
-              <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
-                <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                {verifyMessage}
-              </p>
             )}
           </div>
 
@@ -639,28 +627,16 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
             <p className="text-[11px] text-zinc-500">
               Protects your student serial number from proxy submissions by others.
             </p>
-            {/* Verify name & Change PIN links */}
-            {(selectedStudentId || studentRollNo.trim()) && (
-              <div className="flex items-center gap-3 mt-1">
-                {!verifiedStudent && studentRollNo.trim() && studentPin.length >= 4 && (
-                  <button
-                    type="button"
-                    onClick={handleVerifyStudent}
-                    disabled={isVerifying}
-                    className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold transition-colors"
-                  >
-                    {isVerifying ? 'Checking roll number...' : '✓ Verify my name'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => { setShowChangePinModal(true); setChangePinMsg(null); }}
-                  className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
-                >
-                  <Settings className="w-3 h-3" />
-                  Change My PIN
-                </button>
-              </div>
+            {/* Change PIN link */}
+            {selectedStudentId && (
+              <button
+                type="button"
+                onClick={() => { setShowChangePinModal(true); setChangePinMsg(null); }}
+                className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold mt-0.5 transition-colors"
+              >
+                <Settings className="w-3 h-3" />
+                ⚙️ Change My PIN
+              </button>
             )}
           </div>
 

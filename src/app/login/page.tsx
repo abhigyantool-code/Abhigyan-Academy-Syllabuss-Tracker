@@ -17,12 +17,7 @@ interface LoginPageProps {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedParams = await searchParams;
-  const initialTab =
-    resolvedParams?.from === 'admin'
-      ? 'admin'
-      : resolvedParams?.from === 'student'
-      ? 'student'
-      : 'faculty';
+  const initialTab = resolvedParams?.from === 'admin' ? 'admin' : 'faculty';
 
   const session = await getSession();
   if (session) {
@@ -30,8 +25,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       redirect('/teacher');
     } else if (session.role === 'admin') {
       redirect('/admin');
-    } else if (session.role === 'student') {
-      redirect('/student');
     }
   }
 

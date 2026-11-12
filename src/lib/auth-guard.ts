@@ -1,54 +1,22 @@
 import { getSession } from './session';
 import { redirect } from 'next/navigation';
 
-export type AccessArea = 'admin' | 'dashboard' | 'submit' | 'faculty' | 'student';
+export type AccessArea = 'admin' | 'dashboard' | 'submit' | 'faculty';
 
 export interface AccessResult {
   allowed: boolean;
-  area: AccessArea | AccessArea[];
+  area: AccessArea;
   user: {
     id: string;
     role: string;
     label: string;
     teacherId?: string;
-    studentId?: string;
   } | null;
   reason?: string;
 }
 
-export async function requireAccess(area: AccessArea | AccessArea[]): Promise<AccessResult> {
+export async function requireAccess(area: AccessArea): Promise<AccessResult> {
   const session = await getSession();
-
-  // Handle array of allowed areas/roles (BUG-035 Fix: Prevent fallthrough bypass)
-  if (Array.isArray(area)) {
-    if (!session) {
-      redirect('/login');
-    }
-    const isAllowed = area.some((a) => {
-      if (a === 'admin' && session.role === 'admin') return true;
-      if (a === 'faculty' && (session.role === 'faculty' || session.role === 'admin')) return true;
-      if (a === 'dashboard' && (session.role === 'faculty' || session.role === 'admin')) return true;
-      if (a === 'student' && (session.role === 'student' || session.role === 'admin')) return true;
-      if (a === 'submit') return true;
-      return false;
-    });
-
-    if (!isAllowed) {
-      redirect('/login');
-    }
-
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-        teacherId: session.teacherId,
-        studentId: session.studentId,
-      },
-    };
-  }
 
   // 1. Admin Area: Requires authenticated Director/Admin session
   if (area === 'admin') {
@@ -100,24 +68,7 @@ export async function requireAccess(area: AccessArea | AccessArea[]): Promise<Ac
     };
   }
 
-  // 4. Student Area (/student): Accessible to Students and Admin
-  if (area === 'student') {
-    if (!session || (session.role !== 'student' && session.role !== 'admin')) {
-      redirect('/login?from=student');
-    }
-    return {
-      allowed: true,
-      area,
-      user: {
-        id: session.userId,
-        role: session.role,
-        label: session.name,
-        studentId: session.studentId,
-      },
-    };
-  }
-
-  // 5. Student Submission (/submit): Open entry form, protected by 4-digit PIN + active hours
+  // 4. Student Submission (/submit): Open entry form, protected by 4-digit PIN + active hours
   return {
     allowed: true,
     area,
@@ -127,7 +78,6 @@ export async function requireAccess(area: AccessArea | AccessArea[]): Promise<Ac
           role: session.role,
           label: session.name,
           teacherId: session.teacherId,
-          studentId: session.studentId,
         }
       : null,
   };

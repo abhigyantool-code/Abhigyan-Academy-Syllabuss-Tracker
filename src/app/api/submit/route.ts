@@ -3,29 +3,12 @@ import { getPbClient } from '@/lib/pb';
 import { getTodayIST, checkAcademyHours } from '@/lib/date-utils';
 import { verifyStudent } from '@/lib/student-guard';
 import { submitEntrySchema, analyzeMisuseFlags } from '@/lib/submission-validation';
-import { getClientIp } from '@/lib/rate-limit';
 
-// In-memory sliding window rate limiter: max 30 submissions per IP per minute (bounded to prevent OOM, BUG-041)
+// In-memory sliding window rate limiter: max 30 submissions per IP per minute
 const ipRateLimits = new Map<string, { count: number; resetAt: number }>();
-const MAX_SUBMIT_IP_BUCKETS = 10_000;
 
 function checkIpRateLimit(ip: string): boolean {
   const now = Date.now();
-
-  // Enforce memory capacity bound if map reaches limit
-  if (ipRateLimits.size >= MAX_SUBMIT_IP_BUCKETS) {
-    for (const [key, val] of ipRateLimits.entries()) {
-      if (val.resetAt < now) {
-        ipRateLimits.delete(key);
-      }
-    }
-    while (ipRateLimits.size >= MAX_SUBMIT_IP_BUCKETS) {
-      const oldest = ipRateLimits.keys().next().value;
-      if (oldest === undefined) break;
-      ipRateLimits.delete(oldest);
-    }
-  }
-
   const limit = ipRateLimits.get(ip);
   if (!limit || limit.resetAt < now) {
     ipRateLimits.set(ip, { count: 1, resetAt: now + 60_000 });
@@ -41,7 +24,10 @@ function checkIpRateLimit(ip: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     // 0. IP-Level Rate Limit (Roadmap 2D: max 30 requests per minute)
-    const clientIp = getClientIp(request.headers);
+    const clientIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      '127.0.0.1';
 
     if (!checkIpRateLimit(clientIp)) {
       return NextResponse.json(
@@ -158,11 +144,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 8. Student Verification & PIN Check (active, enrolled & 4-digit PIN)
-    const studentCheck = await verifyStudent(input.studentId, input.courseId, input.pin, clientIp);
-    if (!studentCheck.valid || !studentCheck.student) {
-      return NextResponse.json({ error: studentCheck.error || 'Student authentication failed.' }, { status: 400 });
+    const studentCheck = await verifyStudent(input.studentId, input.courseId, input.pin);
+    if (!studentCheck.valid) {
+      return NextResponse.json({ error: studentCheck.error }, { status: 400 });
     }
-    const resolvedStudentId = studentCheck.student.id;
 
     // 9. Relational Verification: Teacher assigned to Subject
     try {
@@ -193,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     // 11. Duplicate Protection: student + topic + class_date
     const dupCheck = await pb.collection('entries').getList(1, 1, {
-      filter: `student = "${resolvedStudentId}" && topic = "${input.topicId}" && class_date = "${classDate}"`,
+      filter: `student = "${input.studentId}" && topic = "${input.topicId}" && class_date = "${classDate}"`,
     });
 
     if (dupCheck.totalItems > 0) {
@@ -207,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     // 12. Daily Entry Cap Check
     const capCheck = await pb.collection('entries').getList(1, 1, {
-      filter: `student = "${resolvedStudentId}" && class_date = "${classDate}"`,
+      filter: `student = "${input.studentId}" && class_date = "${classDate}"`,
     });
 
     if (capCheck.totalItems >= dailyCap) {
@@ -224,14 +209,14 @@ export async function POST(request: NextRequest) {
       courseId: input.courseId,
       subjectId: input.subjectId,
       topicId: input.topicId,
-      studentId: resolvedStudentId,
+      studentId: input.studentId,
       deviceId: input.deviceId,
     });
 
     // 14. Insert Entry into PocketBase
     const newEntry = await pb.collection('entries').create({
       course: input.courseId,
-      student: resolvedStudentId,
+      student: input.studentId,
       teacher: input.teacherId,
       subject: input.subjectId,
       topic: input.topicId,

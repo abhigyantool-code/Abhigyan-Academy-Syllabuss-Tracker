@@ -5,8 +5,6 @@ import { requireAccess } from '@/lib/auth-guard';
 import { logAudit } from '@/lib/audit';
 import { getTodayIST, getTodayBoundsIST } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
-import { parseCsv } from '@/lib/csv-parser';
-import { hashPin } from '@/lib/pin-hash';
 
 // -------------------------------------------------------------
 // 1. Courses & Settings Actions
@@ -31,22 +29,13 @@ export async function createCourseAction(formData: {
     active: true,
   });
 
-  try {
-    await pb.collection('course_settings').create({
-      course: newCourse.id,
-      confirmation_threshold: formData.confirmation_threshold || 5,
-      daily_entry_cap: formData.daily_entry_cap || 6,
-      code_ttl_minutes: formData.code_ttl_minutes || 60,
-      require_class_code: formData.require_class_code ?? false,
-    });
-  } catch (err: any) {
-    try {
-      await pb.collection('courses').delete(newCourse.id);
-    } catch (cleanupErr) {
-      console.error('Failed to cleanup orphaned course:', cleanupErr);
-    }
-    throw new Error(`Failed to create course settings. Course creation reverted. Error: ${err.message}`);
-  }
+  const newSettings = await pb.collection('course_settings').create({
+    course: newCourse.id,
+    confirmation_threshold: formData.confirmation_threshold || 5,
+    daily_entry_cap: formData.daily_entry_cap || 6,
+    code_ttl_minutes: formData.code_ttl_minutes || 60,
+    require_class_code: formData.require_class_code ?? false,
+  });
 
   await logAudit({
     action: 'CREATE_COURSE',
@@ -347,48 +336,29 @@ export async function copySyllabusAction(sourceCourseId: string, targetCourseId:
   let copiedSubjects = 0;
   let copiedTopics = 0;
 
-  const createdSubIds: string[] = [];
-  const createdTopIds: string[] = [];
+  for (const sub of sourceSubjects) {
+    const newSub = await pb.collection('subjects').create({
+      course: targetCourseId,
+      name: sub.name,
+      sort_order: sub.sort_order,
+    });
+    copiedSubjects++;
 
-  try {
-    for (const sub of sourceSubjects) {
-      const newSub = await pb.collection('subjects').create({
-        course: targetCourseId,
-        name: sub.name,
-        sort_order: sub.sort_order,
+    const sourceTopics = await pb.collection('topics').getFullList({
+      filter: `subject = "${sub.id}"`,
+      sort: 'seq_no',
+    });
+
+    for (const top of sourceTopics) {
+      await pb.collection('topics').create({
+        subject: newSub.id,
+        name: top.name,
+        seq_no: top.seq_no,
+        target_date: top.target_date,
+        notes: top.notes,
       });
-      createdSubIds.push(newSub.id);
-      copiedSubjects++;
-
-      const sourceTopics = await pb.collection('topics').getFullList({
-        filter: `subject = "${sub.id}"`,
-        sort: 'seq_no',
-      });
-
-      for (const top of sourceTopics) {
-        const newTop = await pb.collection('topics').create({
-          subject: newSub.id,
-          name: top.name,
-          seq_no: top.seq_no,
-          target_date: top.target_date,
-          notes: top.notes,
-        });
-        createdTopIds.push(newTop.id);
-        copiedTopics++;
-      }
+      copiedTopics++;
     }
-  } catch (err: any) {
-    for (const topId of createdTopIds) {
-      try {
-        await pb.collection('topics').delete(topId);
-      } catch {}
-    }
-    for (const subId of createdSubIds) {
-      try {
-        await pb.collection('subjects').delete(subId);
-      } catch {}
-    }
-    throw new Error(`Curriculum clone failed. Reverted partial imports (${copiedSubjects} subjects, ${copiedTopics} topics). Error: ${err.message}`);
   }
 
   await logAudit({
@@ -407,8 +377,8 @@ export async function bulkImportTopicsCsvAction(courseId: string, csvContent: st
   await requireAccess('admin');
   const pb = await getPbClient();
 
-  const rows = parseCsv(csvContent);
-  if (rows.length < 2) {
+  const lines = csvContent.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length < 2) {
     throw new Error('CSV must contain a header and at least one data row.');
   }
 
@@ -420,61 +390,57 @@ export async function bulkImportTopicsCsvAction(courseId: string, csvContent: st
 
   let maxSort = existingSubs.length;
   let importedCount = 0;
-  const errors: string[] = [];
 
-  for (let i = 1; i < rows.length; i++) {
-    const parts = rows[i];
-    if (!parts || parts.length < 2) continue;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
+    if (parts.length < 2) continue;
 
-    const subName = parts[0]?.trim();
-    const topicName = parts[1]?.trim();
-    const targetDate = parts[2] && parts[2].trim().match(/^\d{4}-\d{2}-\d{2}$/) ? parts[2].trim() : null;
-    const notes = parts[3]?.trim() || null;
+    const subName = parts[0];
+    const topicName = parts[1];
+    const targetDate = parts[2] && parts[2].match(/^\d{4}-\d{2}-\d{2}$/) ? parts[2] : null;
+    const notes = parts[3] || null;
 
     if (!subName || !topicName) continue;
 
-    try {
-      let subId = subjectMap.get(subName.toLowerCase());
-      if (!subId) {
-        maxSort++;
-        const newSub = await pb.collection('subjects').create({
-          course: courseId,
-          name: subName,
-          sort_order: maxSort,
-        });
-        subId = newSub.id;
-        subjectMap.set(subName.toLowerCase(), subId);
-      }
-
-      const currentTopics = await pb.collection('topics').getList(1, 1, {
-        filter: `subject = "${subId}"`,
-        sort: '-seq_no',
+    let subId = subjectMap.get(subName.toLowerCase());
+    if (!subId) {
+      maxSort++;
+      const newSub = await pb.collection('subjects').create({
+        course: courseId,
+        name: subName,
+        sort_order: maxSort,
       });
-      const nextSeq = (currentTopics.items[0]?.seq_no || 0) + 1;
-
-      await pb.collection('topics').create({
-        subject: subId,
-        name: topicName,
-        seq_no: nextSeq,
-        target_date: targetDate ? `${targetDate} 00:00:00.000Z` : null,
-        notes,
-      });
-      importedCount++;
-    } catch (err: any) {
-      errors.push(`Row ${i + 1} (${subName} - ${topicName}): ${err.message}`);
+      subId = newSub.id;
+      subjectMap.set(subName.toLowerCase(), subId);
     }
+
+    const currentTopics = await pb.collection('topics').getList(1, 1, {
+      filter: `subject = "${subId}"`,
+      sort: '-seq_no',
+    });
+    const nextSeq = (currentTopics.items[0]?.seq_no || 0) + 1;
+
+    await pb.collection('topics').create({
+      subject: subId,
+      name: topicName,
+      seq_no: nextSeq,
+      target_date: targetDate ? `${targetDate} 00:00:00.000Z` : null,
+      notes,
+    });
+    importedCount++;
   }
 
   await logAudit({
     action: 'BULK_IMPORT_TOPICS_CSV',
     entity: 'topics',
     entityId: courseId,
-    after: { importedCount, errorsCount: errors.length },
+    after: { importedCount },
   });
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
-  return { success: true, count: importedCount, errors };
+  return { success: true, count: importedCount };
 }
 
 // -------------------------------------------------------------
@@ -534,40 +500,20 @@ export async function assignTeacherSubjectsAction(teacherId: string, subjectIds:
   await requireAccess('admin');
   const pb = await getPbClient();
 
+  // Delete existing teacher_subjects
   const existing = await pb.collection('teacher_subjects').getFullList({
     filter: `teacher = "${teacherId}"`,
   });
-
-  const existingSubjectMap = new Map(existing.map((item) => [item.subject, item.id]));
-  const targetSubjectSet = new Set(subjectIds);
-
-  const toCreate = subjectIds.filter((sId) => !existingSubjectMap.has(sId));
-  const toDelete = existing.filter((item) => !targetSubjectSet.has(item.subject));
-
-  const createdIds: string[] = [];
-  try {
-    for (const sId of toCreate) {
-      const created = await pb.collection('teacher_subjects').create({
-        teacher: teacherId,
-        subject: sId,
-      });
-      createdIds.push(created.id);
-    }
-  } catch (err: any) {
-    for (const id of createdIds) {
-      try {
-        await pb.collection('teacher_subjects').delete(id);
-      } catch {}
-    }
-    throw new Error(`Failed to assign subjects. Existing assignments preserved. Error: ${err.message}`);
+  for (const item of existing) {
+    await pb.collection('teacher_subjects').delete(item.id);
   }
 
-  for (const item of toDelete) {
-    try {
-      await pb.collection('teacher_subjects').delete(item.id);
-    } catch (delErr) {
-      console.warn(`Failed to delete obsolete teacher_subject assignment ${item.id}:`, delErr);
-    }
+  // Create new assignments
+  for (const sId of subjectIds) {
+    await pb.collection('teacher_subjects').create({
+      teacher: teacherId,
+      subject: sId,
+    });
   }
 
   await logAudit({
@@ -591,36 +537,19 @@ export async function createStudentAction(rollNo: string, name: string, courseId
   await requireAccess('admin');
   const pb = await getPbClient();
 
-  const defaultPinHash = await hashPin('1234');
   const student = await pb.collection('students').create({
     roll_no: rollNo.trim().toUpperCase(),
     name: name.trim(),
     active: true,
     pin: '1234',
-    pin_hash: defaultPinHash,
   });
 
-  const createdEnrollmentIds: string[] = [];
-  try {
-    for (const cId of courseIds) {
-      const en = await pb.collection('enrollments').create({
-        student: student.id,
-        course: cId,
-        batch: 'General',
-      });
-      createdEnrollmentIds.push(en.id);
-    }
-  } catch (err: any) {
-    // Compensating rollback
-    for (const enId of createdEnrollmentIds) {
-      try {
-        await pb.collection('enrollments').delete(enId);
-      } catch {}
-    }
-    try {
-      await pb.collection('students').delete(student.id);
-    } catch {}
-    throw new Error(`Failed to enroll student. Student creation reverted. Error: ${err.message}`);
+  for (const cId of courseIds) {
+    await pb.collection('enrollments').create({
+      student: student.id,
+      course: cId,
+      batch: 'General',
+    });
   }
 
   await logAudit({
@@ -647,42 +576,20 @@ export async function updateStudentAction(id: string, rollNo: string, name: stri
     active,
   });
 
-  // Reconcile enrollments atomically
+  // Re-sync enrollments
   const existingEnrollments = await pb.collection('enrollments').getFullList({
     filter: `student = "${id}"`,
   });
-
-  const existingCourseMap = new Map(existingEnrollments.map((en) => [en.course, en.id]));
-  const targetCourseSet = new Set(courseIds);
-
-  const toAdd = courseIds.filter((cId) => !existingCourseMap.has(cId));
-  const toRemove = existingEnrollments.filter((en) => !targetCourseSet.has(en.course));
-
-  const createdEnrollmentIds: string[] = [];
-  try {
-    for (const cId of toAdd) {
-      const en = await pb.collection('enrollments').create({
-        student: id,
-        course: cId,
-        batch: 'General',
-      });
-      createdEnrollmentIds.push(en.id);
-    }
-  } catch (err: any) {
-    for (const enId of createdEnrollmentIds) {
-      try {
-        await pb.collection('enrollments').delete(enId);
-      } catch {}
-    }
-    throw new Error(`Failed to update student enrollments. Changes reverted. Error: ${err.message}`);
+  for (const en of existingEnrollments) {
+    await pb.collection('enrollments').delete(en.id);
   }
 
-  for (const en of toRemove) {
-    try {
-      await pb.collection('enrollments').delete(en.id);
-    } catch (delErr) {
-      console.warn(`Failed to delete obsolete enrollment ${en.id}:`, delErr);
-    }
+  for (const cId of courseIds) {
+    await pb.collection('enrollments').create({
+      student: id,
+      course: cId,
+      batch: 'General',
+    });
   }
 
   await logAudit({
@@ -703,8 +610,8 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
   await requireAccess('admin');
   const pb = await getPbClient();
 
-  const rows = parseCsv(csvContent);
-  if (rows.length < 2) {
+  const lines = csvContent.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length < 2) {
     throw new Error('CSV must contain a header and at least one data row.');
   }
 
@@ -713,16 +620,14 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
   courses.forEach((c) => courseCodeMap.set(c.code.toUpperCase(), c.id));
 
   let imported = 0;
-  const errors: string[] = [];
-  const defaultPinHash = await hashPin('1234');
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''));
+    if (parts.length < 2) continue;
 
-  for (let i = 1; i < rows.length; i++) {
-    const parts = rows[i];
-    if (!parts || parts.length < 2) continue;
-
-    const rollNo = parts[0]?.trim().toUpperCase();
-    const name = parts[1]?.trim();
-    const courseCode = parts[2] ? parts[2].trim().toUpperCase() : null;
+    const rollNo = parts[0].toUpperCase();
+    const name = parts[1];
+    const courseCode = parts[2] ? parts[2].toUpperCase() : null;
 
     if (!rollNo || !name) continue;
 
@@ -734,7 +639,6 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
         name,
         active: true,
         pin: '1234',
-        pin_hash: defaultPinHash,
       });
       imported++;
 
@@ -745,21 +649,19 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
           batch: 'General',
         });
       }
-    } catch (err: any) {
-      errors.push(`Row ${i + 1} (${rollNo} - ${name}): ${err.message}`);
-    }
+    } catch {}
   }
 
   await logAudit({
     action: 'BULK_IMPORT_STUDENTS_CSV',
     entity: 'students',
-    after: { importedCount: imported, errorsCount: errors.length },
+    after: { importedCount: imported },
   });
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   revalidatePath('/submit');
-  return { success: true, count: imported, errors };
+  return { success: true, count: imported };
 }
 
 // -------------------------------------------------------------
@@ -958,63 +860,3 @@ export async function reviewEntryAction(entryId: string, reviewStatus: 'approved
 // Aliases matching requirements
 export const resetStudentPin = resetStudentPinAction;
 export const resetTeacherPin = resetTeacherPinAction;
-
-// -------------------------------------------------------------
-// 8. Teaching Records Actions (BUG-035)
-// -------------------------------------------------------------
-
-export async function voidTeachingRecordAction(recordId: string, voidReason: string) {
-  // Use requireAccess supporting role arrays (BUG-035 Fix)
-  const access = await requireAccess(['admin', 'faculty']);
-  if (!access.allowed || !access.user) {
-    throw new Error('Unauthorized. Admin or faculty credentials required.');
-  }
-
-  if (!recordId || typeof recordId !== 'string') {
-    throw new Error('Valid teaching record ID is required.');
-  }
-
-  const trimmedReason = (voidReason || '').trim();
-  if (trimmedReason.length < 10) {
-    throw new Error('Void reason must be at least 10 characters long.');
-  }
-
-  const pb = await getPbClient();
-  const existingRecord = await pb.collection('teaching_records').getOne(recordId);
-  if (!existingRecord) {
-    throw new Error('Teaching record not found.');
-  }
-
-  if (existingRecord.is_voided) {
-    throw new Error('This teaching record has already been voided.');
-  }
-
-  // If faculty role, ensure faculty can only void their own teaching records
-  if (access.user.role === 'faculty' && access.user.teacherId) {
-    if (existingRecord.teacher !== access.user.teacherId) {
-      throw new Error('Faculty members may only void their own teaching records.');
-    }
-  }
-
-  const nowIso = new Date().toISOString();
-  const updated = await pb.collection('teaching_records').update(recordId, {
-    is_voided: true,
-    voided_at: nowIso,
-    voided_by: access.user.label || access.user.id,
-    void_reason: trimmedReason,
-  });
-
-  await logAudit({
-    action: 'VOID_TEACHING_RECORD',
-    entity: 'teaching_records',
-    entityId: recordId,
-    before: { is_voided: false },
-    after: { is_voided: true, voided_at: nowIso, void_reason: trimmedReason },
-  });
-
-  revalidatePath('/teacher');
-  revalidatePath('/dashboard');
-  revalidatePath('/admin');
-  return { success: true, record: updated };
-}
-
