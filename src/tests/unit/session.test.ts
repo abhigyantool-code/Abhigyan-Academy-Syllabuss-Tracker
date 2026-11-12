@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
 describe('Faculty Auth Session Token & Cryptography', () => {
-  const SECRET = 'abhigyan-academy-super-secure-key-2026-ist';
+  const SECRET = 'unit-test-session-secret-key-32-chars-long';
 
   test('should securely sign and verify faculty session payload', () => {
     const payload = {
@@ -68,5 +68,41 @@ describe('Faculty Auth Session Token & Cryptography', () => {
     const expectedSig = crypto.createHmac('sha256', SECRET).update(tamperedData).digest('base64url');
 
     assert.notEqual(signature, expectedSig, 'Signature must mismatch when payload is tampered');
+  });
+
+  test('should validate session token expiration (BUG-027)', async () => {
+    const { signPayload, verifyPayload } = await import('../../lib/session');
+
+    // Valid recent token
+    const validToken = signPayload({
+      userId: 'test-user',
+      role: 'faculty',
+      name: 'Ashish Sir',
+      createdAt: Date.now() - 1000,
+    });
+    const validResult = verifyPayload(validToken);
+    assert.ok(validResult !== null);
+    assert.equal(validResult?.name, 'Ashish Sir');
+
+    // Expired token (31 days old)
+    const thirtyOneDaysMs = 31 * 24 * 60 * 60 * 1000;
+    const expiredToken = signPayload({
+      userId: 'test-user',
+      role: 'faculty',
+      name: 'Ashish Sir',
+      createdAt: Date.now() - thirtyOneDaysMs,
+    });
+    const expiredResult = verifyPayload(expiredToken);
+    assert.equal(expiredResult, null, 'Expired session token must be rejected');
+
+    // Token from the distant future
+    const futureToken = signPayload({
+      userId: 'test-user',
+      role: 'faculty',
+      name: 'Ashish Sir',
+      createdAt: Date.now() + 1000000,
+    });
+    const futureResult = verifyPayload(futureToken);
+    assert.equal(futureResult, null, 'Future session token must be rejected');
   });
 });

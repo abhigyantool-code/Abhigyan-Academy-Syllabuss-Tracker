@@ -8,7 +8,7 @@ export const submitEntrySchema = z.object({
   teacherId: z.string().regex(idRegex, 'Please select a faculty member'),
   subjectId: z.string().regex(idRegex, 'Please select a subject'),
   topicId: z.string().regex(idRegex, 'Please select a curriculum topic'),
-  studentId: z.string().regex(idRegex, 'Please select your roll number / name'),
+  studentId: z.string().min(1, 'Please enter your student Roll Number or select your profile'),
   pin: z
     .string()
     .min(4, 'Student PIN must be at least 4 digits')
@@ -50,17 +50,32 @@ export async function analyzeMisuseFlags(params: {
   try {
     const pb = await getPbClient();
 
-    // 1. Sequence Jump Check
-    const [currentTopic, allSubjectTopics, coveredEntries] = await Promise.all([
+    // 1. Sequence Jump Check (BUG-014: Include auto-approved entries and teaching records)
+    const coveredEntriesPromise = pb.collection('entries').getFullList({
+      filter: `subject = "${subjectId}" && (status = "covered" || status = "revision") && (review_status = "approved" || review_status = "auto")`,
+      fields: 'topic',
+    });
+
+    const teachingRecordsPromise = pb
+      .collection('teaching_records')
+      .getFullList({
+        filter: `subject = "${subjectId}" && voided = false`,
+        fields: 'topic',
+      })
+      .catch(() => [] as any[]);
+
+    const [currentTopic, allSubjectTopics, coveredEntries, teachingRecords] = await Promise.all([
       pb.collection('topics').getOne(topicId),
       pb.collection('topics').getFullList({ filter: `subject = "${subjectId}"`, sort: 'seq_no' }),
-      pb.collection('entries').getFullList({
-        filter: `subject = "${subjectId}" && status = "covered" && review_status = "approved"`,
-        fields: 'topic',
-      }),
+      coveredEntriesPromise,
+      teachingRecordsPromise,
     ]);
 
-    const coveredTopicIds = new Set(coveredEntries.map((e) => e.topic));
+    const coveredTopicIds = new Set([
+      ...coveredEntries.map((e: any) => e.topic),
+      ...teachingRecords.map((t: any) => t.topic),
+    ]);
+
     const lowestUncoveredTopic = allSubjectTopics.find((t) => !coveredTopicIds.has(t.id));
     const lowestUncoveredSeq = lowestUncoveredTopic ? lowestUncoveredTopic.seq_no : 1;
     const currentSeq = currentTopic.seq_no || 1;

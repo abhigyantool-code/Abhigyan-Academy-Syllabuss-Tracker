@@ -46,13 +46,12 @@ export async function getSubmitFormData(forceRefresh = false) {
 
   const pb = await getPbClient();
 
-  // Fetch all prerequisite datasets in parallel
-  const [courses, settings, teacherSubjects, topics, enrollments] = await Promise.all([
+  // Fetch curriculum datasets in parallel (Students excluded to prevent public PII harvesting, BUG-003)
+  const [courses, settings, teacherSubjects, topics] = await Promise.all([
     pb.collection('courses').getFullList({ filter: 'active = true', sort: 'sort_order' }),
     pb.collection('course_settings').getFullList(),
     pb.collection('teacher_subjects').getFullList({ expand: 'teacher,subject' }),
     pb.collection('topics').getFullList({ sort: 'seq_no' }),
-    pb.collection('enrollments').getFullList({ expand: 'student' }),
   ]);
 
   const settingsMap = new Map(settings.map((s) => [s.course, s]));
@@ -101,27 +100,12 @@ export async function getSubmitFormData(forceRefresh = false) {
     target_date: t.target_date ? t.target_date.split(' ')[0] : null,
   }));
 
-  const studentList: SubmitStudent[] = [];
-  for (const en of enrollments) {
-    const student = (en.expand as any)?.student;
-    if (student && student.active) {
-      studentList.push({
-        id: student.id,
-        roll_no: student.roll_no,
-        name: student.name,
-        course_id: en.course,
-      });
-    }
-  }
-
-  studentList.sort((a, b) => a.roll_no.localeCompare(b.roll_no));
-
   const result = {
     courses: courseList,
     teachers: Array.from(teacherMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
     subjects: Array.from(subjectMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
     topics: topicList,
-    students: studentList,
+    students: [] as SubmitStudent[],
   };
 
   cachedSubmitData = { data: result, expiry: now + 60_000 };

@@ -15,13 +15,19 @@ async function main() {
   const timestamp = new Date().toISOString().replace(/[-:T.]/g, '_').slice(0, 19);
   const backupName = `backup_${timestamp}.zip`;
 
-  // 1. Trigger server-side snapshot in PocketBase
+  // 1. Trigger server-side snapshot in PocketBase with mandatory verification (BUG-021 Fix)
+  console.log(`📦 Creating server snapshot: ${backupName}...`);
   try {
-    console.log(`📦 Creating server snapshot: ${backupName}...`);
     await pb.backups.create(backupName);
-    console.log(`✓ Server-side snapshot created successfully on VPS.`);
+    const backups = await pb.backups.getFullList();
+    const created = backups.find((b) => b.key === backupName);
+    if (!created || created.size <= 0) {
+      throw new Error(`Backup verification failed: ${backupName} not found in PocketBase backups or has size 0.`);
+    }
+    console.log(`✓ Server-side snapshot created & verified successfully on VPS (${created.size} bytes).`);
   } catch (err: any) {
-    console.warn(`⚠️ Server-side snapshot notice:`, err.message || err);
+    console.error(`❌ FATAL: Server-side snapshot failed:`, err.message || err);
+    throw err;
   }
 
   // 2. Local JSON Dump of All Collections for instant offline recovery
