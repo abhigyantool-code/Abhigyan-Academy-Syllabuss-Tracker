@@ -234,14 +234,14 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty', portalMode 
                 <KeyRound className="w-4 h-4 text-indigo-400" />
                 Faculty 4-Digit PIN
               </label>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                Default: 1234
+              <span className="text-[10px] font-mono text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full">
+                4–8 Digit PIN
               </span>
             </div>
             <input
               type="password"
               maxLength={8}
-              placeholder="Enter 4-digit PIN (1234)"
+              placeholder="Enter your PIN"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-center text-lg font-mono tracking-widest font-black text-white placeholder:text-zinc-600 placeholder:text-xs placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
@@ -295,8 +295,8 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty', portalMode 
                 <KeyRound className="w-4 h-4 text-emerald-400" />
                 Student 4-Digit PIN
               </label>
-              <span className="text-[11px] font-normal text-zinc-500 font-mono">
-                Default: <span className="text-emerald-400 font-bold">1234</span>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                4–8 Digit PIN
               </span>
             </div>
             <input

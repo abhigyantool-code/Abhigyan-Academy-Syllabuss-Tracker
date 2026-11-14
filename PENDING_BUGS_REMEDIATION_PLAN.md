@@ -34,8 +34,8 @@ Following the successful execution of the Final Master Sprint:
 |---|:---:|:---:|:---:|:---:|
 | **Group A: Database Operations** | 6 | **6 (100%)** | 0 | None (Completed) |
 | **Group B: Infrastructure & Secrets** | 2 | 0 | **2** | **YES (VPS Panel + Git Push)** |
-| **Group C: Application & Security Code** | 40 | **40 (100%)** | 0 | None (Completed) |
-| **Total** | 48 | **46 (95.8%)** | **2 (4.2%)** | — |
+| **Group C: Application & Security Code** | 43 | **43 (100%)** | 0 | None (Completed) |
+| **Total** | 51 | **49 (96.1%)** | **2 (3.9%)** | — |
 
 ---
 
@@ -105,6 +105,24 @@ Following the successful execution of the Final Master Sprint:
    end
    ```
 4. Implement automatic fallback to local memory if Redis becomes unreachable, guaranteeing zero downtime.
+
+---
+
+### 3.3 Operational Prerequisite: Coolify VPS Environment Variable Configuration
+
+- **Severity:** Operational / Deployment
+- **Observation:** Probing `https://syllabus360.abhigyanintelligence.cloud/api/health` returned HTTP 503 (`{"status":"degraded","db":false}`).
+- **Root Cause:** In release commit `d5b830c`, hardcoded credential fallback values in `docker-compose.yaml` were removed to ensure zero credential leaks in git. Because Coolify auto-deploys on push and the VPS web console had not yet had these variables explicitly configured in the container UI, Docker passed empty strings, causing database connection checks to fail closed.
+- **Action Plan:**
+  1. Operator logs into Hostinger Coolify web console (`https://<coolify-vps>:8000`).
+  2. Selects application `syllabus-tracker`.
+  3. Under "Environment Variables", adds:
+     - `PB_ADMIN_EMAIL=<pocketbase-admin-email>`
+     - `PB_ADMIN_PASSWORD=<pocketbase-admin-password>`
+     - `SESSION_SECRET=<minimum-32-char-random-secret>`
+     - `ADMIN_MASTER_PASSWORD=<director-master-password>`
+  4. Triggers "Redeploy".
+  5. The live frontend will immediately pass `/api/health` with HTTP 200 OK.
 
 ---
 

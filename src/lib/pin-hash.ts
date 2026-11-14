@@ -137,3 +137,22 @@ export async function verifyPinDual(
 
   return { valid: false, needsMigration: false };
 }
+
+/**
+ * Generates a cryptographically secure random 6-digit numeric temporary PIN.
+ * Eliminates shared default PIN vulnerability by ensuring new accounts receive unique credentials.
+ * Avoids trivial sequences (e.g., 000000, 123456).
+ */
+export function generateTemporaryPin(): string {
+  const trivial = new Set([
+    '000000', '111111', '222222', '333333', '444444',
+    '555555', '666666', '777777', '888888', '999999',
+    '123456', '654321', '12345', '1234', '0000'
+  ]);
+  while (true) {
+    const pin = crypto.randomInt(100000, 1000000).toString();
+    if (!trivial.has(pin)) {
+      return pin;
+    }
+  }
+}

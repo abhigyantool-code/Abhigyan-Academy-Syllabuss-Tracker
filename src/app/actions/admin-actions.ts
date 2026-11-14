@@ -6,7 +6,8 @@ import { logAudit } from '@/lib/audit';
 import { getTodayIST, getTodayBoundsIST } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
 import { parseCsv } from '@/lib/csv-parser';
-import { hashPin } from '@/lib/pin-hash';
+import { hashPin, generateTemporaryPin } from '@/lib/pin-hash';
+import { validateNewPinStrength } from '@/lib/rate-limit';
 
 // -------------------------------------------------------------
 // 1. Courses & Settings Actions
@@ -481,30 +482,40 @@ export async function bulkImportTopicsCsvAction(courseId: string, csvContent: st
 // 3. Faculty Actions
 // -------------------------------------------------------------
 
-export async function createTeacherAction(name: string, phone?: string | null) {
+export async function createTeacherAction(name: string, phone?: string | null, customPin?: string) {
   await requireAccess('admin');
   const pb = await getPbClient();
 
-  const defaultPinHash = await hashPin('1234');
+  let pinToUse = customPin?.trim();
+  if (pinToUse) {
+    const validation = validateNewPinStrength(pinToUse);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid PIN.');
+    }
+  } else {
+    pinToUse = generateTemporaryPin();
+  }
+
+  const pinHash = await hashPin(pinToUse);
   const teacher = await pb.collection('teachers').create({
     name: name.trim(),
     phone: phone ? phone.trim() : null,
     active: true,
     pin: '',
-    pin_hash: defaultPinHash,
+    pin_hash: pinHash,
   });
 
   await logAudit({
     action: 'CREATE_TEACHER',
     entity: 'teachers',
     entityId: teacher.id,
-    after: teacher,
+    after: { ...teacher, pin: '[REDACTED]', pin_hash: '[REDACTED]' },
   });
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   revalidatePath('/submit');
-  return { success: true, teacher };
+  return { success: true, teacher, temporaryPin: pinToUse };
 }
 
 export async function updateTeacherAction(id: string, name: string, phone: string | null, active: boolean) {
@@ -589,17 +600,27 @@ export async function assignTeacherSubjectsAction(teacherId: string, subjectIds:
 // 4. Students & Enrollments Actions
 // -------------------------------------------------------------
 
-export async function createStudentAction(rollNo: string, name: string, courseIds: string[] = []) {
+export async function createStudentAction(rollNo: string, name: string, courseIds: string[] = [], customPin?: string) {
   await requireAccess('admin');
   const pb = await getPbClient();
 
-  const defaultPinHash = await hashPin('1234');
+  let pinToUse = customPin?.trim();
+  if (pinToUse) {
+    const validation = validateNewPinStrength(pinToUse);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid PIN.');
+    }
+  } else {
+    pinToUse = generateTemporaryPin();
+  }
+
+  const pinHash = await hashPin(pinToUse);
   const student = await pb.collection('students').create({
     roll_no: rollNo.trim().toUpperCase(),
     name: name.trim(),
     active: true,
     pin: '',
-    pin_hash: defaultPinHash,
+    pin_hash: pinHash,
   });
 
   const createdEnrollmentIds: string[] = [];
@@ -629,13 +650,13 @@ export async function createStudentAction(rollNo: string, name: string, courseId
     action: 'CREATE_STUDENT',
     entity: 'students',
     entityId: student.id,
-    after: { student, enrolledCourses: courseIds },
+    after: { student, enrolledCourses: courseIds, pin: '[REDACTED]', pin_hash: '[REDACTED]' },
   });
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   revalidatePath('/submit');
-  return { success: true, student };
+  return { success: true, student, temporaryPin: pinToUse };
 }
 
 export async function updateStudentAction(id: string, rollNo: string, name: string, active: boolean, courseIds: string[] = []) {
@@ -716,7 +737,7 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
 
   let imported = 0;
   const errors: string[] = [];
-  const defaultPinHash = await hashPin('1234');
+  const generatedPins: Array<{ rollNo: string; name: string; temporaryPin: string }> = [];
 
   for (let i = 1; i < rows.length; i++) {
     const parts = rows[i];
@@ -725,20 +746,30 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
     const rollNo = parts[0]?.trim().toUpperCase();
     const name = parts[1]?.trim();
     const courseCode = parts[2] ? parts[2].trim().toUpperCase() : null;
+    const customPin = parts[3]?.trim();
 
     if (!rollNo || !name) continue;
 
     const targetCourseId = (courseCode ? courseCodeMap.get(courseCode) : null) || defaultCourseId;
 
     try {
+      let pinToUse = customPin;
+      if (pinToUse && /^\d{4,8}$/.test(pinToUse)) {
+        // use provided valid numeric PIN from CSV
+      } else {
+        pinToUse = generateTemporaryPin();
+      }
+      const pinHash = await hashPin(pinToUse);
+
       const student = await pb.collection('students').create({
         roll_no: rollNo,
         name,
         active: true,
         pin: '',
-        pin_hash: defaultPinHash,
+        pin_hash: pinHash,
       });
       imported++;
+      generatedPins.push({ rollNo, name, temporaryPin: pinToUse });
 
       if (targetCourseId) {
         await pb.collection('enrollments').create({
@@ -761,7 +792,7 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   revalidatePath('/submit');
-  return { success: true, count: imported, errors };
+  return { success: true, count: imported, errors, generatedPins };
 }
 
 // -------------------------------------------------------------
@@ -850,54 +881,74 @@ export async function autoGenerateDailyCodesAction() {
 // 6. PIN Management Actions
 // -------------------------------------------------------------
 
-export async function resetStudentPinAction(studentId: string, newPin: string) {
+export async function resetStudentPinAction(studentId: string, newPin?: string) {
   await requireAccess('admin');
 
-  if (!/^\d{4,8}$/.test(newPin)) {
-    throw new Error('PIN must be 4–8 numeric digits.');
+  let pinToUse = newPin?.trim();
+  if (pinToUse) {
+    const validation = validateNewPinStrength(pinToUse);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'PIN must be 4–8 numeric digits and not a trivial default pattern.');
+    }
+  } else {
+    pinToUse = generateTemporaryPin();
   }
 
   const pb = await getPbClient();
   const before = await pb.collection('students').getOne(studentId).catch(() => null);
   if (!before) throw new Error('Student not found.');
 
-  await pb.collection('students').update(studentId, { pin: newPin.trim() });
+  const pinHash = await hashPin(pinToUse);
+  await pb.collection('students').update(studentId, {
+    pin: '',
+    pin_hash: pinHash,
+  });
 
   await logAudit({
     action: 'RESET_STUDENT_PIN',
     entity: 'students',
     entityId: studentId,
-    before: { pin: '[REDACTED]' },
-    after: { pin: '[REDACTED]' },
+    before: { pin: '[REDACTED]', pin_hash: '[REDACTED]' },
+    after: { pin: '[REDACTED]', pin_hash: '[REDACTED]' },
   });
 
   revalidatePath('/admin');
-  return { success: true };
+  return { success: true, temporaryPin: pinToUse };
 }
 
-export async function resetTeacherPinAction(teacherId: string, newPin: string) {
+export async function resetTeacherPinAction(teacherId: string, newPin?: string) {
   await requireAccess('admin');
 
-  if (!/^\d{4,8}$/.test(newPin)) {
-    throw new Error('PIN must be 4–8 numeric digits.');
+  let pinToUse = newPin?.trim();
+  if (pinToUse) {
+    const validation = validateNewPinStrength(pinToUse);
+    if (!validation.valid) {
+      throw new Error(validation.error || 'PIN must be 4–8 numeric digits and not a trivial default pattern.');
+    }
+  } else {
+    pinToUse = generateTemporaryPin();
   }
 
   const pb = await getPbClient();
   const before = await pb.collection('teachers').getOne(teacherId).catch(() => null);
   if (!before) throw new Error('Teacher not found.');
 
-  await pb.collection('teachers').update(teacherId, { pin: newPin.trim() });
+  const pinHash = await hashPin(pinToUse);
+  await pb.collection('teachers').update(teacherId, {
+    pin: '',
+    pin_hash: pinHash,
+  });
 
   await logAudit({
     action: 'RESET_TEACHER_PIN',
     entity: 'teachers',
     entityId: teacherId,
-    before: { pin: '[REDACTED]' },
-    after: { pin: '[REDACTED]' },
+    before: { pin: '[REDACTED]', pin_hash: '[REDACTED]' },
+    after: { pin: '[REDACTED]', pin_hash: '[REDACTED]' },
   });
 
   revalidatePath('/admin');
-  return { success: true };
+  return { success: true, temporaryPin: pinToUse };
 }
 
 // -------------------------------------------------------------

@@ -23,7 +23,10 @@ import {
 import { verifyPinDual, hashPin } from '@/lib/pin-hash';
 import { verifyStudent } from '@/lib/student-guard';
 
-export async function teacherLoginAction(teacherId: string, pin: string): Promise<{ success: boolean; error?: string }> {
+export async function teacherLoginAction(
+  teacherId: string,
+  pin: string
+): Promise<{ success: boolean; error?: string; mustChangePin?: boolean }> {
   let clientIp = '127.0.0.1';
   try {
     const headerList = await headers();
@@ -106,7 +109,8 @@ export async function teacherLoginAction(teacherId: string, pin: string): Promis
     });
 
     revalidatePath('/teacher');
-    return { success: true };
+    const isDefaultPin = pin.trim() === '1234';
+    return { success: true, mustChangePin: isDefaultPin };
   } catch (err: any) {
     if (inFlightReserved) {
       releasePinAttempt(resolvedTeacherId, clientIp);
@@ -370,7 +374,7 @@ export async function changeStudentPinAction(
     // 7. Hash New PIN and update Student record in PocketBase (BUG-004)
     const newPinHash = await hashPin(newPin.trim());
     await pb.collection('students').update(student.id, {
-      pin: newPin.trim(),
+      pin: '',
       pin_hash: newPinHash,
     });
 
@@ -452,7 +456,7 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
 
     const newPinHash = await hashPin(newPin.trim());
     await pb.collection('teachers').update(session.teacherId, {
-      pin: newPin.trim(),
+      pin: '',
       pin_hash: newPinHash,
     });
 
@@ -507,7 +511,7 @@ export async function verifyStudentLookupAction(
 export async function studentLoginAction(
   rollNo: string,
   pin: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; mustChangePin?: boolean }> {
   let clientIp = '127.0.0.1';
   try {
     const headerList = await headers();
@@ -520,36 +524,41 @@ export async function studentLoginAction(
     return { success: false, error: ipCheck.error || 'Too many requests from your network. Please wait.' };
   }
 
-  if (!rollNo || !rollNo.trim()) {
-    return { success: false, error: 'Please enter your Roll Number.' };
-  }
-  if (!pin || !pin.trim()) {
-    return { success: false, error: 'Please enter your 4-digit PIN.' };
-  }
-
-  const cleanRoll = rollNo.trim().toUpperCase();
-  const pb = await getPbClient();
-
-  let student: any;
-  try {
-    student = await pb.collection('students').getFirstListItem(`roll_no = "${cleanRoll}"`);
-  } catch {
-    recordPinFailure('unknown_student', clientIp);
-    return { success: false, error: 'Invalid Roll Number or PIN.' };
-  }
-
-  if (!student.active) {
-    return { success: false, error: 'This student account is inactive. Please contact the academy administration.' };
-  }
-
-  const rateCheck = checkStudentPinRateLimit(student.id, clientIp);
-  if (!rateCheck.allowed) {
-    return { success: false, error: rateCheck.error || 'Account temporarily locked due to multiple failed PIN attempts.' };
-  }
-
-  let inFlightReserved = true;
+  let inFlightReserved = false;
+  let resolvedStudentId = '';
 
   try {
+    if (!rollNo || !rollNo.trim()) {
+      return { success: false, error: 'Please enter your Roll Number.' };
+    }
+    if (!pin || !pin.trim()) {
+      return { success: false, error: 'Please enter your 4-digit PIN.' };
+    }
+
+    const cleanRoll = rollNo.trim().toUpperCase();
+    const pb = await getPbClient();
+
+    let student: any;
+    try {
+      student = await pb.collection('students').getFirstListItem(`roll_no = "${cleanRoll}"`);
+    } catch {
+      recordPinFailure('unknown_student', clientIp);
+      return { success: false, error: 'Invalid Roll Number or PIN.' };
+    }
+
+    resolvedStudentId = student.id;
+
+    if (!student.active) {
+      return { success: false, error: 'This student account is inactive. Please contact the academy administration.' };
+    }
+
+    const rateCheck = checkStudentPinRateLimit(student.id, clientIp);
+    if (!rateCheck.allowed) {
+      return { success: false, error: rateCheck.error || 'Account temporarily locked due to multiple failed PIN attempts.' };
+    }
+
+    inFlightReserved = true;
+
     const verification = await verifyPinDual(pin.trim(), student.pin_hash, student.pin);
     if (!verification.valid) {
       inFlightReserved = false;
@@ -564,7 +573,7 @@ export async function studentLoginAction(
     if (verification.needsMigration) {
       try {
         const newHash = await hashPin(pin.trim());
-        await pb.collection('students').update(student.id, { pin_hash: newHash });
+        await pb.collection('students').update(student.id, { pin: '', pin_hash: newHash });
       } catch (err) {
         console.warn('Student PIN hash opportunistic migration deferred:', err);
       }
@@ -584,11 +593,13 @@ export async function studentLoginAction(
       entityId: student.id,
     });
 
-    return { success: true };
+    const isDefaultPin = pin.trim() === '1234';
+    return { success: true, mustChangePin: isDefaultPin };
   } catch (err: any) {
-    if (inFlightReserved) {
-      releasePinAttempt(student.id, clientIp);
+    if (inFlightReserved && resolvedStudentId) {
+      releasePinAttempt(resolvedStudentId, clientIp);
     }
+    console.error('studentLoginAction error:', err);
     return { success: false, error: 'An unexpected authentication error occurred. Please try again.' };
   }
 }

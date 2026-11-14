@@ -22,6 +22,7 @@ import {
   verifyPinHash,
   verifyPinHashSync,
   verifyPinDual,
+  generateTemporaryPin,
 } from '../../lib/pin-hash';
 import { getSessionSecret } from '../../lib/session';
 
@@ -551,6 +552,49 @@ describe('BUG-031 & BUG-032 Security Hardening & Remediation Tests', () => {
       assert.strictEqual('newPin' in auditPayload.after, false);
       assert.strictEqual(JSON.stringify(auditPayload.after).includes('"pin":'), false);
       assert.strictEqual(JSON.stringify(auditPayload.after).includes('"password":'), false);
+    });
+  });
+
+  describe('Temporary PIN Generation & Default PIN Security Hardening', () => {
+    it('should generate cryptographically secure 6-digit numeric temporary PINs', () => {
+      const pin = generateTemporaryPin();
+      assert.strictEqual(typeof pin, 'string');
+      assert.strictEqual(pin.length, 6);
+      assert.match(pin, /^\d{6}$/);
+    });
+
+    it('should never generate trivial or sequential patterns (000000, 123456)', () => {
+      const trivial = new Set([
+        '000000', '111111', '222222', '333333', '444444',
+        '555555', '666666', '777777', '888888', '999999',
+        '123456', '654321', '12345', '1234', '0000'
+      ]);
+      for (let i = 0; i < 50; i++) {
+        const pin = generateTemporaryPin();
+        assert.strictEqual(trivial.has(pin), false, `Generated trivial PIN: ${pin}`);
+      }
+    });
+
+    it('should generate unique varied PINs across multiple invocations', () => {
+      const pins = new Set<string>();
+      for (let i = 0; i < 20; i++) {
+        pins.add(generateTemporaryPin());
+      }
+      assert.ok(pins.size > 15, 'Generated PINs lack expected entropy');
+    });
+
+    it('should correctly hash generated temporary PIN and verify with verifyPinDual', async () => {
+      const tempPin = generateTemporaryPin();
+      const hash = await hashPin(tempPin);
+
+      // Verify that verifyPinDual authenticates with correct temp PIN
+      const verification = await verifyPinDual(tempPin, hash, '');
+      assert.strictEqual(verification.valid, true);
+      assert.strictEqual(verification.needsMigration, false);
+
+      // Verify that wrong PIN is rejected
+      const wrongVerification = await verifyPinDual('999999', hash, '');
+      assert.strictEqual(wrongVerification.valid, false);
     });
   });
 });

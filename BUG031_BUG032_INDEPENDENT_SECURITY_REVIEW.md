@@ -56,7 +56,7 @@ Inspection of deployment files revealed additional critical credential leaks:
 - In `src/lib/pb.ts` line 6:
   `const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD || '[REDACTED_PASSWORD]';`
 - In `docker-compose.yaml` line 16 and `docker-compose.yml` line 14:
-  `SESSION_SECRET=${SESSION_SECRET:-c68f9a2e1d4b8e7c5f3a0d9b8e7f6a5c4d3b2a1e0f9a8b7c6d5e4f3a2b1c0d9e}`
+  `SESSION_SECRET=${SESSION_SECRET:-[REDACTED_SECRET]}`
 
 These fallbacks expose the production superuser password in source control and Docker configurations.
 

@@ -491,7 +491,7 @@ export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientPr
             <form onSubmit={handleUpdatePin} className="space-y-3">
               <div>
                 <label className="text-xs font-semibold text-zinc-400 block mb-1">
-                  Current PIN (Default: 1234)
+                  Current PIN
                 </label>
                 <input
                   type="password"

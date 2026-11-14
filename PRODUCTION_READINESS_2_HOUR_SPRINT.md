@@ -20,8 +20,8 @@ While the PocketBase REST API security lockdown (Operation A) was successfully e
 2. **Teacher Portal Disconnected from Teaching Records (NEW-01):** In `src/lib/teacher-data.ts` (lines 115–123, 147–173, 203–248), topic progress and covered counts query **exclusively** from the `entries` collection. It does not query `teaching_records`. Even after `teaching_records` is created, the Teacher Portal will not reflect faculty-endorsed topics or increment progress metrics.
 3. **Faculty PIN Change Crashes Due to Missing Schema Field (NEW-03):** In production PocketBase, the `teachers` collection schema **does not contain the `pin_hash` field** (unlike `students`, which has `pin_hash`). When faculty attempts to change their PIN via `updateTeacherPinAction()` in `src/app/actions/auth-actions.ts` (lines 440–443), PocketBase rejects the update with a 400 Bad Request (`The field 'pin_hash' does not exist in 'teachers'`). The action rethrows the error, crashing the PIN change modal.
 4. **Active Credential Exposure in Tracked Source Code & Docker Compose (BUG-008, BUG-025, BUG-007):** Hardcoded production fallback credentials remain in the codebase:
-   - Superuser password `FfZjw97Mpp9gSwp@spb` in `src/lib/pb.ts` (L6) and `docker-compose.yaml` (L15).
-   - Director master password `AbhigyanAdmin2026!` in `src/app/actions/auth-actions.ts` (L139), `docker-compose.yaml` (L17), and `docker-compose.yml` (L15).
+   - Superuser password `[REDACTED_HISTORIC_SECRET]` in `src/lib/pb.ts` (L6) and `docker-compose.yaml` (L15).
+   - Director master password `[REDACTED_HISTORIC_SECRET]` in `src/app/actions/auth-actions.ts` (L139), `docker-compose.yaml` (L17), and `docker-compose.yml` (L15).
    - Session HMAC secret fallback in `docker-compose.yaml` (L16) and `docker-compose.yml` (L14).
 5. **Anti-Misuse Query Field Mismatch (NEW-02):** In `src/lib/submission-validation.ts` (L62), anti-misuse logic queries `filter: 'subject = "${subjectId}" && voided = false'`, whereas the schema field name is `is_voided`. The query fails silently and returns empty array, omitting teaching records from sequence jump checks.
 6. **8 of 11 PocketBase Collections Have Zero Database Indexes (BUG-013):** No composite unique indexes exist on `entries`, `topics`, `teacher_subjects`, `enrollments`, or `course_settings`.
@@ -61,7 +61,7 @@ Below is the reconciled audit of all 45 issues from [`BUGS_AND_ISSUES_REGISTER.m
 | **BUG-005** | Plaintext Faculty PIN Storage & Missing `pin_hash` Field | Security | High | **Awaiting Production Migration** | Faculty PINs stored in plaintext; `teachers` schema missing `pin_hash`. | Add field & run `migrate-pins-to-hashes.ts --execute` | **YES** |
 | **BUG-006** | Insecure Session Cookie Configuration | Security | High | **Fixed in Codebase / Deployed** | Cookies configured with `httpOnly`, `sameSite: 'lax'`, `secure: production`. | None. | No |
 | **BUG-007** | Hardcoded Fallback Session HMAC Secret | Security | Critical | **Partially Fixed (Docker Leak)** | `src/lib/session.ts` throws in prod, but literal remains in `docker-compose.*`. | Remove fallback string from `docker-compose.*` | No |
-| **BUG-008** | Hardcoded PocketBase Superuser Credentials in Source | Security | Critical | **UNRESOLVED / FALSE FIX** | Superuser password `FfZjw97Mpp9gSwp@spb` hardcoded in `pb.ts` L6 and `docker-compose.yaml` L15. | Remove literal fallback; throw in `pb.ts` if unset | No |
+| **BUG-008** | Hardcoded PocketBase Superuser Credentials in Source | Security | Critical | **UNRESOLVED / FALSE FIX** | Superuser password `[REDACTED_HISTORIC_SECRET]` hardcoded in `pb.ts` L6 and `docker-compose.yaml` L15. | Remove literal fallback; throw in `pb.ts` if unset | No |
 | **BUG-009** | Teacher Endorsement Fabricates Student Entries | Data Integrity | Critical | **Fixed in Codebase / Deployed** | No synthetic entries created, but write fails silently without `teaching_records`. | Prerequisite: Create `teaching_records` | No |
 | **BUG-010** | Six Fabricated Entries in Production Attributed to Ashish Sir | Data Integrity | High | **Awaiting Production Migration** | 6 fake student entries remain in `entries` table. | Author & run `phase1d-migrate-fabricated-entries.ts` | **YES** |
 | **BUG-011** | Preservation of Two Genuine Student Submissions | Data Integrity | Critical | **Verified Intact** | Genuine submissions `7lhmo4p1mzkw9w2` and `pogx003bic5x4pi` intact. | Mandatory assertion in all scripts. | No |
@@ -78,7 +78,7 @@ Below is the reconciled audit of all 45 issues from [`BUGS_AND_ISSUES_REGISTER.m
 | **BUG-022** | Unsafe Security Rollback Fallback to Empty String `""` | Security | Critical | **Fixed in Codebase / Deployed** | Rollback uses strict snapshot rules; never defaults to `""`. | None. | No |
 | **BUG-023** | Security Verification False Positives on HTTP 404 | Security | High | **Fixed in Codebase / Deployed** | Script asserts HTTP 403 specifically; 404 is treated as failure. | None. | No |
 | **BUG-024** | Verification Fixtures Contaminating Real Academy Records | Data Integrity | Medium | **Fixed in Codebase / Deployed** | Probe fixtures isolated with clean teardown in `finally`. | None. | No |
-| **BUG-025** | Hardcoded Director Master Password Fallback in Code | Security | Critical | **UNRESOLVED / FALSE FIX** | Password `AbhigyanAdmin2026!` hardcoded in `auth-actions.ts` L139 and `docker-compose.*`. | Remove literal fallback; throw if unset | No |
+| **BUG-025** | Hardcoded Director Master Password Fallback in Code | Security | Critical | **UNRESOLVED / FALSE FIX** | Password `[REDACTED_HISTORIC_SECRET]` hardcoded in `auth-actions.ts` L139 and `docker-compose.*`. | Remove literal fallback; throw if unset | No |
 | **BUG-026** | Non-Constant-Time Session HMAC Verification (`!==`) | Security | Medium | **Fixed in Codebase / Deployed** | Timing-safe `safeCompare` used in `session.ts`. | None. | No |
 | **BUG-027** | Missing Expiration Timestamp in Session Tokens | Security | Medium | **Fixed in Codebase / Deployed** | Tokens carry expiration with 30-day max age validation. | None. | No |
 | **BUG-028** | Legacy PostgreSQL Scripts Left in `src/scripts/` | Technical Debt | Medium | **Fixed in Codebase / Deployed** | Moved to `src/scripts/legacy_postgres/`. | None. | No |
@@ -130,8 +130,8 @@ These 5 fixes directly prevent silent data loss during faculty endorsements, res
 
 4. **Fix A4: Purge Hardcoded Credential Fallbacks from Source Code (BUG-008, BUG-025, BUG-007)**
    - *Files Involved:*
-     - `src/lib/pb.ts` (L6): Remove `'FfZjw97Mpp9gSwp@spb'`. Throw fatal error in production if `PB_ADMIN_PASSWORD` is unset.
-     - `src/app/actions/auth-actions.ts` (L139): Remove `'AbhigyanAdmin2026!'`. Throw error if `ADMIN_MASTER_PASSWORD` is unset.
+     - `src/lib/pb.ts` (L6): Remove `'[REDACTED_HISTORIC_SECRET]'`. Throw fatal error in production if `PB_ADMIN_PASSWORD` is unset.
+     - `src/app/actions/auth-actions.ts` (L139): Remove `'[REDACTED_HISTORIC_SECRET]'`. Throw error if `ADMIN_MASTER_PASSWORD` is unset.
      - `docker-compose.yaml` (L14-17) & `docker-compose.yml` (L14-15): Remove literal fallback passwords.
    - *Time:* 15 minutes.
    - *Requires Operator Approval:* No (Application code fix; ensure VPS environment variables are populated).

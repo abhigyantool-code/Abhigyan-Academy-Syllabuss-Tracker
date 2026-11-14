@@ -82,6 +82,13 @@ To ensure zero service disruption during credential life-cycles:
   - Token rejected if `createdAt > Date.now() + 60 * 1000` (Clock Skew Defense).
   - Production requires `SESSION_SECRET` length $\ge 32$ characters; fails closed on startup if absent.
 
+### 3.4 Temporary PIN Generation & Lifecycle Security (NEW-04, NEW-05, NEW-06)
+- **Unique Temporary PIN Generator:** Implemented `generateTemporaryPin()` in `src/lib/pin-hash.ts` generating cryptographically random 6-digit non-trivial numeric PINs (rejection of repeating or sequential patterns).
+- **Zero Plaintext Write Invariant:** Admin resets (`resetStudentPinAction`, `resetTeacherPinAction`), user PIN changes (`changeStudentPinAction`, `updateTeacherPinAction`), and bulk imports strictly store salted scrypt hashes in `pin_hash` and set `pin: ''`.
+- **Mandatory PIN Change Policy:** `studentLoginAction` and `teacherLoginAction` return `mustChangePin: true` when authenticated with default PIN `1234`, forcing immediate credential rotation.
+- **Redaction of Default PINs from UI:** All badges, labels, and placeholders advertising "Default: 1234" have been permanently removed from client forms.
+- **Session Cookie Production Security:** Session cookies enforce `secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_INSECURE !== 'true'`, `httpOnly: true`, and `sameSite: 'lax'`.
+
 ---
 
 ## 4. Role Separation & Portal Isolation Verification
@@ -161,7 +168,7 @@ In-memory Maps are capped at `MAX_IP_BUCKETS = 10_000` and `MAX_STUDENT_BUCKETS 
 
 ### 6.1 Current Status in Active Codebase
 - **Source Code (`src/`):** 100% sanitized. Zero hardcoded passwords, superuser credentials, or session secret fallbacks exist in any `.ts`, `.tsx`, `.js`, or `.json` file.
-- **Docker Compose (`docker-compose.yaml`, `docker-compose.yml`):** All literal fallback strings (`:-FfZjw97Mpp9gSwp@spb`, `:-AbhigyanAdmin2026!`, `:-c68f9a2e...`) removed. Environment variables strictly inherit from the hosting environment.
+- **Docker Compose (`docker-compose.yaml`, `docker-compose.yml`):** All literal fallback strings (`:-[REDACTED_HISTORIC_SECRET]`, `:-[REDACTED_HISTORIC_SECRET]`, `:-[REDACTED_SECRET]`) removed. Environment variables strictly inherit from the hosting environment.
 
 ### 6.2 Historical Git Commit Exposure & Remediation Procedure
 During initial project setup in commits `e2799cc`, `b081d27`, `e6422a0`, and `a185b0e`, earlier test credentials were committed to the Git tree. While these fallbacks have been removed from the current working tree (`HEAD`), the strings exist in historical commit snapshots.

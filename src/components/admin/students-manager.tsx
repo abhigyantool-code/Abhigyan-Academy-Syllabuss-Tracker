@@ -444,7 +444,7 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
                   maxLength={8}
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 1234"
+                  placeholder="e.g. 849201"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>

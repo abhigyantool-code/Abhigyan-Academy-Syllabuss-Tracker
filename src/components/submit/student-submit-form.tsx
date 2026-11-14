@@ -242,7 +242,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
       return;
     }
     if (!studentPin.trim() || studentPin.trim().length < 4) {
-      setErrorMessage('Please enter your 4-digit Student PIN (Default: 1234).');
+      setErrorMessage('Please enter your 4–8 digit Student PIN.');
       return;
     }
     if (currentCourse?.require_class_code && !classCode.trim()) {
@@ -611,7 +611,7 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
                 Student PIN
               </span>
               <span className="text-[11px] font-normal text-zinc-400 font-mono">
-                Default: <span className="text-indigo-400 font-bold">1234</span>
+                4–8 Digits
               </span>
             </label>
             <div className="relative">
@@ -619,9 +619,9 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
                 type={showPin ? 'text' : 'password'}
                 inputMode="numeric"
                 pattern="[0-9]*"
-                maxLength={6}
+                maxLength={8}
                 required
-                placeholder="Enter 4-digit PIN (e.g. 1234)"
+                placeholder="Enter your PIN"
                 value={studentPin}
                 onChange={(e) => setStudentPin(e.target.value.replace(/\D/g, ''))}
                 className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm font-mono font-bold text-white tracking-widest placeholder-zinc-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 pr-10"

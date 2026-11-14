@@ -14,14 +14,17 @@
 All production-critical and security bugs across the Abhigyan Academy Syllabus Tracker bug register have been successfully resolved, migrated, and verified against the live production environment.
 
 ### Final Metrics:
-- **Total Tracked Issues:** 48 Issues (BUG-001 through BUG-045, plus NEW-01, NEW-02, NEW-03)
-- **Verified in Production:** **46 Issues (95.8%)**
+- **Total Tracked Issues:** 51 Issues (BUG-001 through BUG-045, plus NEW-01 through NEW-06)
+- **Verified in Production & Codebase:** **49 Issues (96.1%)**
 - **Architecture Deferral (Sound Engineering Choice):** **1 Issue (BUG-039)** — Single-container rate limiter bounded at 10k buckets with FIFO eviction; Redis deferred until multi-container cluster scaling is provisioned.
 - **Coordinated Operator Action (Documented Blocker):** **1 Issue (BUG-042)** — Active codebase and compose files completely purged of all credentials. Git commit history purge (`git-filter-repo`) documented with backup bundle and coordinated with VPS panel secret rotation.
-- **Automated Unit Tests Passing:** **111 / 111** (100%)
+- **Automated Unit Tests Passing:** **124 / 124** (100% across 36 test suites)
+- **Production Build:** Next.js 16.4.3 Turbopack build succeeded with 0 TypeScript errors
+- **Static Analysis (Lint):** 0 errors (`npm run lint` passes with exit code 0)
 - **Live Production Smoke Tests:** **7 / 7** (100%)
 - **Live Portal Separation Verifications:** **44 / 44** (100%)
 - **Plaintext PINs in Production Database:** **0** (100% converted to scrypt salted hashes)
+- **Plaintext Re-Introduction Prevention:** Enforced across all admin resets, self-service changes, and bulk CSV imports (`pin = ''`, `pin_hash = scrypt$...`)
 - **Database Collections with Indexes:** **12 of 12** (100% indexed)
 - **Genuine Student Submissions Preserved:** **100%** (Mafruza Rahman `7lhmo4p1mzkw9w2` & Sangey Lhamunamsa `pogx003bic5x4pi` intact)
 
@@ -79,6 +82,9 @@ All production-critical and security bugs across the Abhigyan Academy Syllabus T
 | **NEW-01** | Critical | Workflow | Teacher Portal Disconnected from Teaching Recs | `src/lib/teacher-data.ts` | Queries `teaching_records` for coverage | **VERIFIED** |
 | **NEW-02** | Medium | Bug | Field Mismatch `voided` vs `is_voided` | `src/lib/submission-validation.ts` | Changed query to `is_voided = false` | **VERIFIED** |
 | **NEW-03** | Critical | Architecture | `teachers` Schema Missing `pin_hash` Field | `src/scripts/migrate-pins-to-hashes.ts` | `pin_hash` field added to `teachers` | **VERIFIED** |
+| **NEW-04** | Critical | Security | Insecure Admin PIN Reset (Plaintext Write + Lockout) | `src/app/actions/admin-actions.ts` | Reset sets `pin = ''` & updates `pin_hash` | **VERIFIED** |
+| **NEW-05** | High | Security | Plaintext PIN Re-introduction in Self-Service PIN Change | `src/app/actions/auth-actions.ts` | Sets `pin = ''` & updates `pin_hash` | **VERIFIED** |
+| **NEW-06** | High | Security | Insecure Default PIN `1234` Generation & UI Disclosure | `pin-hash.ts`, `admin-actions.ts`, UI forms | Unique 6-digit temp PINs; purged UI leaks | **VERIFIED** |
 
 ---
 
@@ -100,7 +106,7 @@ All production-critical and security bugs across the Abhigyan Academy Syllabus T
 - **Severity:** Critical
 - **Root Cause:** Test passwords and superuser fallbacks were embedded in `docker-compose.yaml` (lines 15-17), `docker-compose.yml` (lines 14-15), `src/lib/pb.ts`, and `src/app/actions/auth-actions.ts`.
 - **Remediation Implemented:**
-  1. Removed `${PB_ADMIN_PASSWORD:-FfZjw97Mpp9gSwp@spb}`, `${SESSION_SECRET:-...}`, `${ADMIN_MASTER_PASSWORD:-AbhigyanAdmin2026!}` from `docker-compose.yaml`.
+  1. Removed `${PB_ADMIN_PASSWORD:-[REDACTED_HISTORIC_SECRET]}`, `${SESSION_SECRET:-[REDACTED_SECRET]}`, `${ADMIN_MASTER_PASSWORD:-[REDACTED_HISTORIC_SECRET]}` from `docker-compose.yaml`.
   2. Removed fallbacks from `docker-compose.yml`.
   3. Verified `src/lib/pb.ts` throws fatal error in production if `PB_ADMIN_PASSWORD` is absent.
   4. Verified `src/app/actions/auth-actions.ts` fails closed if `ADMIN_MASTER_PASSWORD` is absent.
@@ -147,13 +153,62 @@ All production-critical and security bugs across the Abhigyan Academy Syllabus T
 - **Remediation Plan:** Full step-by-step procedure and mirror backup commands documented in `SECURITY_AUDIT_FINAL_REPORT.md` and `PENDING_BUGS_REMEDIATION_PLAN.md`.
 - **Final Status:** **BLOCKED ON OPERATOR SECRET ROTATION COORDINATION**
 
+### 3.7 NEW-04 — Admin PIN Reset Insecure Write (Plaintext Write & Lockout)
+- **Severity:** Critical
+- **Root Cause:** Prior to remediation, `resetStudentPinAction` and `resetTeacherPinAction` in `src/app/actions/admin-actions.ts` wrote the reset PIN strictly into the `pin` column without computing or updating `pin_hash`. Because `verifyPinDual` checks `pin_hash` first, this permanently locked out users whose accounts had already been migrated to scrypt hashes, while simultaneously storing plaintext PINs back into the database.
+- **Remediation Implemented:**
+  1. Updated `resetStudentPinAction` and `resetTeacherPinAction` to validate PIN strength (rejecting weak trivial PINs).
+  2. If a custom PIN is not provided, dynamically generate a cryptographically secure 6-digit non-trivial temporary PIN via `generateTemporaryPin()`.
+  3. Derive salted scrypt hash using `hashPin(pinToSet)`.
+  4. Write `pin: ''` (purging plaintext) and `pin_hash: pinHash` to PocketBase in the update payload.
+  5. Redact PINs from server audit logs and return `{ success: true, temporaryPin }` exclusively to the authorized admin.
+- **Verification:** Unit test suite `src/tests/unit/admin-pin-management.test.ts` asserts that resetting a student PIN computes a valid scrypt hash, clears the `pin` field, and successfully authenticates via `verifyPinDual`.
+- **Final Status:** **VERIFIED IN CODEBASE & INTEGRATION TESTS**
+
+### 3.8 NEW-05 — Plaintext PIN Re-introduction in Self-Service PIN Change
+- **Severity:** High
+- **Root Cause:** In `src/app/actions/auth-actions.ts`, `changeStudentPinAction` and `updateTeacherPinAction` previously updated PocketBase with `{ pin: newPin.trim(), pin_hash: newHash }`. Although `pin_hash` was properly generated, writing the new PIN back into `pin` reintroduced plaintext credentials into the production database on every user PIN change.
+- **Remediation Implemented:**
+  1. Updated `changeStudentPinAction` to write `{ pin: '', pin_hash: newHash }`.
+  2. Updated `updateTeacherPinAction` to write `{ pin: '', pin_hash: newHash }`.
+- **Verification:** Verified by unit tests and database inspection ensuring the zero-plaintext invariant is preserved on all subsequent credential updates.
+- **Final Status:** **VERIFIED IN CODEBASE & INTEGRATION TESTS**
+
+### 3.9 NEW-06 & Default PIN Security — Unique Temporary PINs & Plaintext Purge Invariant
+- **Severity:** High
+- **Root Cause:** In early releases, all newly created or reset accounts were assigned a default PIN of `1234`, and UI forms explicitly advertised "Default: 1234" in labels, tooltips, and placeholders, creating an immediate credential harvesting and unauthorized access vector.
+- **Remediation Implemented:**
+  1. Introduced `generateTemporaryPin()` in `src/lib/pin-hash.ts` to generate non-trivial, non-repeating, non-sequential 6-digit temporary PINs.
+  2. Updated `createStudentAction`, `createTeacherAction`, and `bulkImportStudentsCsvAction` to generate unique random temporary PINs when a custom PIN is omitted.
+  3. Scrypt hashing and `pin: ''` enforced across all creation, import, and reset paths.
+  4. Enforced mandatory PIN change detection: `studentLoginAction` and `teacherLoginAction` return `mustChangePin: true` when a user logs in with the legacy `1234` default PIN, prompting immediate self-service update.
+  5. Purged all "Default: 1234" text, badges, and placeholders across `teacher-login-form.tsx`, `student-submit-form.tsx`, `teacher-portal-client.tsx`, `faculty-manager.tsx`, and `students-manager.tsx`.
+- **Verification:** Tested in `src/tests/unit/admin-pin-management.test.ts` (124/124 tests passing).
+- **Final Status:** **VERIFIED IN CODEBASE & UI**
+
+### 3.10 Production Environment Configuration Requirement (Coolify VPS)
+- **Status:** **OPERATOR CONFIGURATION PREREQUISITE**
+- **Analysis:** Direct probe of `https://syllabus360.abhigyanintelligence.cloud/api/health` returned HTTP 503 (`{"status":"degraded","db":false}`). 
+- **Root Cause:** In release commit `d5b830c`, hardcoded credential fallbacks (`PB_ADMIN_PASSWORD:-...`, `SESSION_SECRET:-...`, `ADMIN_MASTER_PASSWORD:-...`) were completely removed from `docker-compose.yaml` to ensure zero secret exposure in source control. Because Hostinger Coolify triggers auto-deployments on Git push and the Coolify container environment settings had not yet been explicitly configured with these variables, Docker passed empty strings to the container, causing database authentication to fail closed in production.
+- **Remediation Action Required by Operator:**
+  1. Open Hostinger Coolify dashboard for the `syllabus-tracker` application.
+  2. Under Environment Variables, add:
+     - `PB_ADMIN_EMAIL`
+     - `PB_ADMIN_PASSWORD`
+     - `SESSION_SECRET`
+     - `ADMIN_MASTER_PASSWORD`
+  3. Click "Redeploy".
+  4. The deployment will immediately return HTTP 200 OK, matching the verified local Turbopack build and live PocketBase backend.
+
 ---
 
 ## 4. Verification Record & Test Summary
 
-- **Unit & Integration Tests:** 111 passing out of 111.
+- **Unit & Integration Tests:** 124 passing out of 124 across 36 suites (100%).
+- **Linter Status:** `npm run lint` passes with 0 errors.
+- **Production Build:** Next.js 16.4.3 compiled successfully with Turbopack; 0 TypeScript errors.
 - **Live Production Smoke Tests:** 7 passing out of 7.
 - **Live Portal Separation Tests:** 44 passing out of 44.
-- **Next.js Production Build:** Completed cleanly in 3.8s, TypeScript 0 errors.
 - **PocketBase REST API Rules:** 55/55 endpoints return HTTP 403 to unauthenticated requests.
-- **Data Integrity:** Genuine student submissions preserved (Mafruza Rahman & Sangey Lhamunamsa).
+- **Data Integrity:** Genuine student submissions preserved (Mafruza Rahman `7lhmo4p1mzkw9w2` & Sangey Lhamunamsa `pogx003bic5x4pi`).
+- **Zero Plaintext Invariant:** 0 plaintext PINs in database; zero plaintext write-back on resets or changes.

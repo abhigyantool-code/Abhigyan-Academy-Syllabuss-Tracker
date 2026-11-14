@@ -82,7 +82,7 @@ export async function createSession(payload: Omit<SessionPayload, 'createdAt'>):
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: false, // Ensures session persists seamlessly whether accessed via HTTP or HTTPS reverse proxy
+    secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_INSECURE !== 'true',
     sameSite: 'lax',
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: '/',

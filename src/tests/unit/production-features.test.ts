@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { determineTopicStatus } from '../../lib/coverage-calculator';
 
 describe('Production Features — PIN Management & Health Check', () => {
   // 1. PIN Format Validation Rules
@@ -153,8 +154,6 @@ describe('Production Features — PIN Management & Health Check', () => {
 
   // 5. Teacher Portal Teaching Records Integration & Non-Double-Counting (NEW-01)
   describe('Teacher Portal Teaching Records Integration (NEW-01)', () => {
-    const { determineTopicStatus } = require('../../lib/coverage-calculator');
-
     it('should mark topic as covered when a completed teaching record exists without requiring student threshold', () => {
       const status = determineTopicStatus({
         hasAdminApproval: true, // Endorsed via teaching_record status === 'completed'

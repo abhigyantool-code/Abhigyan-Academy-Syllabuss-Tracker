@@ -163,3 +163,26 @@ In early testing, `teacherEndorseTopicAction` synthesized 6 fake student entries
 | `teaching_records` Count | 0 | **6** | Verified |
 | `entries` Total Count | 10 | **10** | Verified (0 Data Loss) |
 | Genuine Student Submissions | 2 | **2** | 100% Intact |
+
+---
+
+## 7. Ongoing Zero-Plaintext PIN Invariant Across Admin & Self-Service Mutations (NEW-04 & NEW-05)
+
+To guarantee that database migrations are not undermined by subsequent runtime operations:
+
+### 7.1 Hardened Mutation Architecture
+1. **Admin PIN Resets (`resetStudentPinAction`, `resetTeacherPinAction`):**
+   - Historically wrote plaintext PINs to the `pin` field and neglected `pin_hash`, locking out migrated accounts.
+   - Now derives salted scrypt hash (`hashPin(pinToSet)`), updates `pin_hash: pinHash`, and explicitly clears `pin: ''`.
+   - Rejects trivial or weak custom PINs; auto-generates 6-digit cryptographically random temporary PINs via `generateTemporaryPin()` when omitted.
+2. **Self-Service PIN Changes (`changeStudentPinAction`, `updateTeacherPinAction`):**
+   - Historically wrote `pin: newPin.trim()` alongside `pin_hash`, reintroducing plaintext credentials on user change.
+   - Now sets `pin: ''` and writes strictly to `pin_hash: newHash`.
+3. **Bulk Student CSV Imports (`bulkImportStudentsCsvAction`):**
+   - Auto-generates unique 6-digit temporary PINs for each student, derives scrypt hashes, and stores `pin: ''`.
+4. **Direct Creation Actions (`createStudentAction`, `createTeacherAction`):**
+   - Directly stores salted scrypt hash into `pin_hash` and clears `pin: ''`.
+
+### 7.2 Verification Result
+- Verified in `src/tests/unit/admin-pin-management.test.ts` (124/124 tests passing).
+- Zero plaintext PINs can be written to the production database via any application path.
