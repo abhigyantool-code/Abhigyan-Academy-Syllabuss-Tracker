@@ -15,11 +15,11 @@
 
 | Item | Evidence | Action Taken | Status |
 |---|---|---|---|
-| **Production Commit** | `321e6a8` on `origin/main` (lineage: `231b9d4` -> `d6d03f9` -> `c212aea` -> `7025246` -> `38c48e8` -> `321e6a8`); live HTTP 200 health check; live Next-Action IDs; live Admin `/student` returns Student Oversight Directory | Reconciled hash lineage; populated Coolify dashboard variables directly via Coolify API; removed compose fallback secrets; verified deployed code matches tested source | **VERIFIED** |
-| **BUG-042 (Git History & Secrets)** | Coolify dashboard production variables populated directly via Coolify API; `SESSION_SECRET` rotated (64-char key); fallback secrets removed from `docker-compose.yaml` & `docker-compose.yml`; 0 secrets in active source (`src/`) & working tree (`git grep` = 0 matches); bundle backup created (`syllabus-tracker-backup-38c48e8.bundle`); PB backup verified | Automated Coolify API environment population; rotated `SESSION_SECRET`; removed all fallback credentials from repository; verified clean deployment on VPS; documented coordination requirements for remote history rewrite | **CREDENTIALS POPULATED & WORKING TREE SANITIZED** |
+| **Production Commit** | `a87fc42` (and closure release) on `origin/main` (lineage: `231b9d4` -> `d6d03f9` -> `c212aea` -> `7025246` -> `38c48e8` -> `321e6a8` -> `a87fc42`); live HTTP 200 health check; live Next-Action IDs; live Admin `/student` returns Student Oversight Directory | Reconciled hash lineage; populated Coolify dashboard variables directly via Coolify API; removed compose fallback secrets; resolved dual compose conflict (`docker-compose.yml` archived); verified deployed code matches tested source | **VERIFIED** |
+| **BUG-042 (Git History & Secrets)** | Coolify dashboard production variables populated directly via Coolify API; `SESSION_SECRET` rotated (64-char key); fallback secrets removed from `docker-compose.yaml`; dual compose conflict eliminated (`docker-compose.yml` moved to `database/legacy_postgres/`); 0 secrets in active source (`src/`) & working tree (`git grep` = 0 matches); complete bundle backup created (`syllabus-tracker-backup-complete.bundle`); PB backup verified; history scrub runbook verified | Automated Coolify API environment population; rotated `SESSION_SECRET`; removed all fallback credentials from repository; eliminated compose file conflict; verified clean deployment on VPS; tested history scrub with `prepare-history-scrub.ts`; documented coordination requirements for remote history rewrite | **CREDENTIALS POPULATED & WORKING TREE SANITIZED** |
 | **BUG-039 (Rate Limiting)** | Single Docker container topology on Coolify VPS verified; in-memory bounded limiter (10k buckets, FIFO eviction, atomic reservation, rightmost proxy IP extraction) tested | Verified bounded in-memory limiter; documented architectural rationale for retaining bounded in-memory limiter and deferring Redis until horizontal clustering | **VERIFIED / DEFERRED TO CLUSTERING** |
 | **Default PIN Policy** | 75/75 students and 8/8 teachers hashed with scrypt in production (0 plaintext). `generateTemporaryPin()` generates 6-digit random non-trivial PINs. Mandatory rotation on default PIN | Verified zero plaintext in database; audited creation, reset, and CSV workflows; verified non-dismissable rotation modal; verified credential redaction in audit logs | **VERIFIED & SECURED** |
-| **Backup Protection** | PB `/api/backups` returns HTTP 401 unauthenticated; direct zip download returns HTTP 403; `.gitignore` & `.dockerignore` exclude backups/secrets; restored `backup_2026_11_14_08_19_17.zip` into isolated SQLite, verified `PRAGMA integrity_check = ok`; latest VPS snapshot `backup_2026_11_14_09_48_41.zip` (2.08MB) created | Hardened `.dockerignore` with `database/backups` & `.env*`; executed off-server restoration test; created live server-side backup snapshot on VPS; created full git repository bundle | **VERIFIED** |
+| **Backup Protection** | PB `/api/backups` returns HTTP 401 unauthenticated; direct zip download returns HTTP 403; `.gitignore` & `.dockerignore` exclude backups/secrets/*.bundle; restored `backup_2026_11_14_08_19_17.zip` into isolated SQLite, verified `PRAGMA integrity_check = ok`; latest VPS snapshot `backup_2026_11_14_09_48_41.zip` (2.08MB) created; full git bundle `syllabus-tracker-backup-complete.bundle` (672.4 KB) verified | Hardened `.dockerignore` & `.gitignore` with `database/backups`, `.env*`, and `*.bundle`; executed off-server restoration test; created live server-side backup snapshot on VPS; created full git repository bundle covering all refs up to current release | **VERIFIED** |
 | **Admin `/student` Access** | Admin session accesses `/student` (HTTP 200); renders dedicated Authorized Student Directory / Read-Only Audit View (`/student?studentId=...`); student PIN modal withheld; student sessions strictly locked to session `studentId` | Implemented authorized admin student management overview and audit view at `/student`; refined UI semantics to distinguish audit mode from self-service; enforced strict student session isolation; added unit tests | **VERIFIED & HARDENED** |
 | **Overall Regression** | 137/137 unit tests pass (41 suites); 7/7 live smoke tests pass; 44/44 portal separation tests pass; `tsc` 0 errors; `lint` 0 errors; Next.js Turbopack build clean; genuine student records 100% intact | Full test execution across all suites; verified both genuine student entries (`7lhmo4p1mzkw9w2`, `pogx003bic5x4pi`) intact | **VERIFIED** |
 
@@ -46,6 +46,8 @@
   - **Commit `7025246`**: Refined Admin student audit UI semantics, resolved ESLint warnings, added audit invariants unit test (137 tests total), and updated audit reports.
   - **Commit `38c48e8`**: Finalized production closure audit report with full lineage and verification tables.
   - **Commit `321e6a8`**: Following automated Coolify API integration, populated all 8 production environment variables directly in Coolify, rotated `SESSION_SECRET` (64-character hex key), cleanly removed all fallback credentials from `docker-compose.yaml` and `docker-compose.yml`, deployed on Coolify, and verified that production runs 100% cleanly with zero fallback strings in the repository.
+  - **Commit `a87fc42`**: Reconciled production closure reports and verification files with Coolify API configuration, live deployment status, and commit `321e6a8`.
+  - **Closure Release**: Resolved Docker Compose dual-file CLI collision by archiving `docker-compose.yml` to `database/legacy_postgres/docker-compose.postgres.yml` (ensuring `docker-compose.yaml` is unambiguously consumed), generated verified full git bundle `syllabus-tracker-backup-complete.bundle`, and provided tested pre-flight automation (`src/scripts/prepare-history-scrub.ts`).
 - **Deployed Source Match:**
   - Live static chunk analysis and action extraction on `https://syllabus360.abhigyanintelligence.cloud` verified that the active server actions in production correspond to the deployed release:
     - `adminLoginAction`: `403f451fa7ebedc03d785949b1db9d9616d1826697`
@@ -61,25 +63,36 @@
 ### 2.2 BUG-042: Git History & Secret Rotation Analysis
 - **Current Repository State:**
   - Active source code (`src/`): **100% sanitized**. Zero plaintext passwords, master secrets, or session keys exist in application code.
-  - Active configuration files (`docker-compose.yaml`, `docker-compose.yml`): **100% sanitized**. All fallback credential strings have been cleanly removed in commit `321e6a8`. `git grep` across the entire repository tree returns 0 occurrences of historical passwords.
+  - Active configuration files (`docker-compose.yaml`): **100% sanitized**. All fallback credential strings have been cleanly removed in commit `321e6a8`. Legacy PostgreSQL compose file moved to `database/legacy_postgres/docker-compose.postgres.yml`. `git grep` across the entire repository tree returns 0 occurrences of historical passwords.
   - Production Environment Variables (Coolify VPS):
     - Configured directly via Coolify API (`https://coolify.abhigyanintelligence.cloud/api/v1` with Bearer auth token).
     - `SESSION_SECRET`: Rotated to a 64-character cryptographically secure hex key.
     - `ADMIN_MASTER_PASSWORD`, `PB_ADMIN_EMAIL`, `PB_ADMIN_PASSWORD`, `POCKETBASE_URL`, `NODE_ENV`, `REQUIRE_PIN`, `REQUIRE_CLASS_CODE` are fully populated and active.
 - **Backup Verification Prior to Any History Modification:**
-  - Git Repository Mirror / Bundle Backup: Full repository bundle created at `/home/ayush/.gemini/antigravity/scratch/syllabus-tracker-backup-38c48e8.bundle` (669 KB, containing all refs, tags, and commits).
+  - Git Repository Mirror / Bundle Backup: Full repository bundle created at `/home/ayush/.gemini/antigravity/scratch/syllabus-tracker-backup-complete.bundle` (672.4 KB, containing all 4 refs up to the current release, verified with `git bundle verify`).
   - PocketBase Server Snapshot: Fresh live snapshot `backup_2026_11_14_09_48_41.zip` (2,078,987 bytes) created on the VPS containing all 12 collections and SQLite database integrity verified.
 - **Why Blind Remote Force Push Has Been Prevented:**
   - While all working tree files and active container environments are now completely sanitized and `SESSION_SECRET` has been rotated in production, historical commits (`e2799cc` through `231b9d4`) still exist in the Git commit object database on GitHub (`origin/main`).
   - Rewriting remote Git history via `git-filter-repo` and `git push --force-with-lease` alters all downstream commit hashes, which breaks existing local checkouts for other team members and can disrupt Coolify's commit cache unless coordinated.
   - Furthermore, `PB_ADMIN_PASSWORD` (PocketBase superuser) and `ADMIN_MASTER_PASSWORD` (Director login) represent human/system credentials. Even after a Git history rewrite, their historical values must be rotated at the operator level so that exposed strings are permanently obsolete.
-- **Remaining Operator Coordination Steps:**
-  1. Operator rotates `ADMIN_MASTER_PASSWORD` to their chosen new master password in the Coolify console (or via API) and PocketBase superuser password in `https://stracker.abhigyanintelligence.cloud/_/`.
-  2. Team members coordinate to re-clone the repository once history rewriting is executed.
-  3. Execute `git-filter-repo --replace-text` with lease:
+- **Remaining Operator Coordination Steps & Tested Runbook:**
+  1. Operator coordinates with team members to commit/push or save working patches.
+  2. Operator rotates `ADMIN_MASTER_PASSWORD` to their chosen new master password in Coolify console (or via API) and PocketBase superuser password in `https://stracker.abhigyanintelligence.cloud/_/` (updating `PB_ADMIN_PASSWORD` in Coolify).
+  3. Run pre-flight check to generate untracked replacement expressions:
      ```bash
-     git push origin --force-with-lease --all
+     npx tsx src/scripts/prepare-history-scrub.ts
      ```
+  4. Execute history scrubbing (verified on clone with 0 secret matches and passing unit tests):
+     ```bash
+     python3 -m venv /tmp/filter_venv
+     /tmp/filter_venv/bin/pip install git-filter-repo
+     /tmp/filter_venv/bin/git-filter-repo --replace-text /tmp/git-filter-replace-expressions.txt --force
+     git remote add origin https://github.com/abhigyantool-code/Abhigyan-Academy-Syllabuss-Tracker.git
+     ```
+  5. Verify unit tests: `npm run test:unit`
+  6. Force push with lease: `git push origin --force-with-lease --all`
+  7. Clean up `/tmp/git-filter-replace-expressions.txt`.
+  8. Team members re-clone the repository; trigger Coolify redeployment via API.
 - **Status:** **CREDENTIALS POPULATED & WORKING TREE SANITIZED** (Blocker on Coolify dashboard variable population is resolved; working tree has 0 secrets; force push held pending team coordination).
 
 ---

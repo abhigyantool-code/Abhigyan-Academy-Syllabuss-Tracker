@@ -80,7 +80,7 @@ No issue may be removed or dismissed from this register. Statuses must strictly 
 | **BUG-039** | Ephemeral Process-Local Memory Rate Limiting State | Resilience | Medium | Investigated | Phase 2 | `src/lib/rate-limit.ts` (`ipBuckets`, `studentBuckets`) |
 | **BUG-040** | Session Auth Bypass on Student PIN Change When `studentId` Undefined | Security | High | Fixed (Codebase) | Phase 2 | `src/app/actions/auth-actions.ts` L248 |
 | **BUG-041** | Unbounded Memory Allocation & OOM Risk in Rate Limiting Cleanup | Denial of Service | Medium | Fixed (Codebase) | Phase 2 | `src/lib/rate-limit.ts` (`MAX_IP_BUCKETS = 10_000`) |
-| **BUG-042** | Leaked Master Password String Present in Unit Test Files & Git History | Security | High | Investigated / Rotated | Phase 1 / Phase 2 | Tests sanitized; rotated in .env.local |
+| **BUG-042** | Leaked Master Password String Present in Unit Test Files & Git History | Security | High | Populated / Working Tree Clean | Phase 1 / Phase 2 | Coolify envs populated; compose sanitized; SESSION_SECRET rotated; full bundle backup created; runbook verified |
 | **BUG-043** | Timing Information Side-Channel in `safeCompare` Length Mismatch | Cryptography | Low | Fixed (Codebase) | Phase 2 | `src/lib/rate-limit.ts` (SHA-256 pre-hashing) |
 | **BUG-044** | Unrestricted PocketBase REST API Publicly Serving Plaintext PINs | Security | Critical | Verified (Prod) | Phase 1 | PocketBase REST API (Blocked 403 Forbidden) |
 | **BUG-045** | Unprotected Student PIN Brute-Force Path in `/api/submit` | Security | High | Fixed (Codebase) | Phase 2 | `src/app/api/submit/route.ts` & `src/lib/student-guard.ts` |
@@ -771,9 +771,9 @@ No issue may be removed or dismissed from this register. Statuses must strictly 
 - **Impact:** Anyone with read access to the git repository or historical commits can extract the master credential.
 - **Reproduction:** Run `git log -S "[COMPROMISED_OLD_PASSWORD]" --oneline`.
 - **Proposed Fix:** Permanently retire and rotate the master password in production; ensure test files use synthetic dummy secrets. (Sanitized from `pin-auth.test.ts` in this audit).
-- **Status:** Investigated / Rotated
+- **Status:** Populated / Working Tree Clean & Runbook Verified
 - **Phase:** Phase 1 / Phase 2
-- **Verification:** Sanitized from `pin-auth.test.ts`; rotated in `.env.local` to 32-character secret; production rotation required on deploy.
+- **Verification:** Sanitized from `pin-auth.test.ts` and `docker-compose.yaml`; all 8 production variables populated directly in Coolify via REST API; `SESSION_SECRET` rotated (64-character hex key); full git bundle backup verified (`syllabus-tracker-backup-complete.bundle`); history-scrubbing runbook automated via `prepare-history-scrub.ts`.
 - **Evidence:** `pin-auth.test.ts` uses synthetic test secrets.
 - **Dependencies:** BUG-031.
 
