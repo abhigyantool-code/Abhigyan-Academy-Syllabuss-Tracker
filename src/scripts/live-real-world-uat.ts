@@ -744,8 +744,14 @@ async function main() {
         await teacher2Page.goto(`${PROD_URL}/teacher?subject=${ndaSubject.id}`, { waitUntil: 'networkidle' });
         const teacher2Body = await teacher2Page.locator('main').innerText();
         assert.ok(
-          teacher2Body.includes('No Subject Allocations Found'),
+          !teacher2Body.includes(ndaSubject.name) && teacher2Body.includes('Curriculum Topics (0)'),
           'Unassigned Teacher 2 must be isolated from Teacher 1 subject & records'
+        );
+        await teacher2Page.click('button:has-text("My Teaching Records")');
+        const teacher2RecordsText = await teacher2Page.locator('main').innerText();
+        assert.ok(
+          !teacher2RecordsText.includes(endorsedTopicName),
+          'Teacher 2 must not see or be able to void Teacher 1 teaching records'
         );
         // Confirm Teacher 1's record is still intact in PocketBase
         const trCheck = await pb.collection('teaching_records').getOne(createdTeachingRecordId);
