@@ -3,7 +3,7 @@
 **Project:** Abhigyan Academy — Syllabus Tracker  
 **Production Frontend URL:** `https://syllabus360.abhigyanintelligence.cloud`  
 **Production PocketBase URL:** `https://stracker.abhigyanintelligence.cloud`  
-**Deployed Production Commit:** `d807bfd` (`d807bfd3d05bc839addc56841e5581573340b891` on `origin/main`)  
+**Deployed Production Commit:** `3ae52b8` / `786aa34` (Predecessor: `d807bfd` on `origin/main`)  
 **UAT Execution Date:** 2026-11-14  
 **Test Harness:** [src/scripts/live-real-world-uat.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/scripts/live-real-world-uat.ts), [src/scripts/live-portal-isolation-tests.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/scripts/live-portal-isolation-tests.ts), [src/scripts/live-production-smoke-tests.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/scripts/live-production-smoke-tests.ts) (Real Headless Google Chrome Browser Contexts + Direct HTTP + PocketBase Verification)
 
@@ -13,7 +13,7 @@
 
 A complete, end-to-end real-world User Acceptance Test (UAT) was executed against the live production deployment at `https://syllabus360.abhigyanintelligence.cloud` using separate isolated Chromium browser contexts (`BrowserContext`) for **Student**, **Teacher**, and **Administrator** roles, along with a 12-session concurrent launch simulation.
 
-During initial real-world code & workflow inspection and live UAT execution, **8 real-world workflow/usability defects (`UAT-BUG-001` through `UAT-BUG-008`)** were discovered, fixed in source code, unit-tested (`139/139 PASS`), deployed to production via Coolify (`commit d807bfd`), and re-verified live on production (`22/22 UAT suites PASS`, `44/44 Portal Isolation checks PASS`, `7/7 Smoke Tests PASS`). All synthetic UAT records were deterministically purged after testing, leaving all 75 genuine students, 8 genuine teachers, 12 genuine student entries (including `7lhmo4p1mzkw9w2` and `pogx003bic5x4pi`), and 7 genuine teaching records 100% intact.
+During initial real-world code & workflow inspection and live UAT execution, **9 real-world workflow/usability/concurrency defects (`UAT-BUG-001` through `UAT-BUG-009`)** were discovered, fixed in source code, unit-tested (`140/140 PASS`), deployed to production via Coolify (`commits d807bfd -> 786aa34 -> 3ae52b8`), and re-verified live on production (`22/22 UAT suites PASS`, `44/44 Portal Isolation checks PASS`, `7/7 Smoke Tests PASS`). All synthetic UAT records were deterministically purged after testing, leaving all 75 genuine students, 8 genuine teachers, 12 genuine student entries (including `7lhmo4p1mzkw9w2` and `pogx003bic5x4pi`), and 7 genuine teaching records 100% intact.
 
 ### Launch Readiness Scorecard
 
