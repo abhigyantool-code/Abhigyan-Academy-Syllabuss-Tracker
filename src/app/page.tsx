@@ -29,9 +29,10 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Top Banner */}
-      <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-300 px-4 py-2 text-xs md:text-sm text-center">
-        ⚠️ <strong>Phase 1 Mode:</strong> Authentication is disabled across all routes for review and verification.
+      {/* Top Status Banner */}
+      <div className="bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-300 px-4 py-2 text-xs md:text-sm text-center flex items-center justify-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span><strong>Production Active:</strong> Isolated Student, Faculty, and Admin Portals with Zero-Plaintext PIN Protection.</span>
       </div>
 
       {/* Main Content */}
@@ -139,7 +140,7 @@ export default async function Home() {
       </main>
 
       <footer className="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-        Abhigyan Academy Syllabus Tracker &bull; Phase 1 (No Authentication) &bull; Built with Next.js App Router, PocketBase, Tailwind & shadcn
+        Abhigyan Academy Syllabus Tracker &bull; Production Release &bull; Built with Next.js App Router, PocketBase, Tailwind & shadcn
       </footer>
     </div>
   );

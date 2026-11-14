@@ -9,6 +9,7 @@
     "lint": "eslint",
     "pb:setup": "tsx src/scripts/pocketbase-setup.ts",
     "pb:backup": "tsx src/scripts/pocketbase-backup.ts",
+    "test": "npm run test:unit",
     "test:unit": "tsx --test src/tests/unit/*.test.ts",
     "test:e2e": "playwright test"
   },

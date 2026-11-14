@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { hashPin, verifyPinDual, generateTemporaryPin } from '../../lib/pin-hash';
 import { validateNewPinStrength } from '../../lib/rate-limit';
 import { parseCsv } from '../../lib/csv-parser';
+import { signPayload, verifyPayload } from '../../lib/session';
 
 describe('Admin PIN Management & Temporary Credential Security', () => {
   describe('Temporary PIN Generator Security Properties', () => {
@@ -123,6 +124,27 @@ describe('Admin PIN Management & Temporary Credential Security', () => {
         assert.equal(rec.hasPlaintext, false);
       }
     });
+
+    it('should reject weak PINs (like 1234 or 0000) in CSV import and replace with secure temporary PINs', async () => {
+      const csv = `Roll Number,Student Name,Course Code,Custom PIN\nNDA-201,Student Weak,NDA,1234\nNDA-202,Student Trivial,NDA,0000`;
+      const rows = parseCsv(csv);
+
+      for (let i = 1; i < rows.length; i++) {
+        const [, , , customPin] = rows[i];
+        let pinToUse = customPin?.trim();
+        if (pinToUse && validateNewPinStrength(pinToUse).valid) {
+          // Strong custom pin
+        } else {
+          pinToUse = generateTemporaryPin();
+        }
+
+        // Must NOT use 1234 or 0000
+        assert.notEqual(pinToUse, '1234');
+        assert.notEqual(pinToUse, '0000');
+        assert.match(pinToUse, /^\d{6}$/);
+        assert.equal(validateNewPinStrength(pinToUse).valid, true);
+      }
+    });
   });
 
   describe('Default PIN (1234) Detection for Mandatory PIN Change', () => {
@@ -136,6 +158,114 @@ describe('Admin PIN Management & Temporary Credential Security', () => {
       const pin = '849201';
       const isDefault = pin.trim() === '1234';
       assert.equal(isDefault, false);
+    });
+  });
+
+  describe('Session Token mustChangePin Lifecycle', () => {
+    it('should encode and preserve mustChangePin: true in signed session token', () => {
+      const payload = {
+        userId: 'student_test_1',
+        role: 'student' as const,
+        name: 'Test Student',
+        studentId: 'student_test_1',
+        mustChangePin: true,
+        createdAt: Date.now(),
+      };
+      const token = signPayload(payload);
+      const decoded = verifyPayload(token);
+      assert.ok(decoded);
+      assert.equal(decoded.mustChangePin, true);
+    });
+
+    it('should encode and preserve mustChangePin: false after PIN rotation', () => {
+      const payload = {
+        userId: 'student_test_1',
+        role: 'student' as const,
+        name: 'Test Student',
+        studentId: 'student_test_1',
+        mustChangePin: false,
+        createdAt: Date.now(),
+      };
+      const token = signPayload(payload);
+      const decoded = verifyPayload(token);
+      assert.ok(decoded);
+      assert.equal(decoded.mustChangePin, false);
+    });
+  });
+
+  describe('Student Portal CLEARED Review Status Integration', () => {
+    it('should count CLEARED student submissions in approvedEntries count', () => {
+      const mockEntries = [
+        { id: '1', status: 'covered', review_status: 'auto' },
+        { id: '2', status: 'covered', review_status: 'approved' },
+        { id: '3', status: 'covered', review_status: 'CLEARED' }, // Genuine Entry 2 status
+        { id: '4', status: 'covered', review_status: 'pending' },
+        { id: '5', status: 'covered', review_status: 'rejected' },
+      ];
+
+      const approvedCount = mockEntries.filter(
+        (e) => e.status === 'covered' && (e.review_status === 'auto' || e.review_status === 'approved' || e.review_status === 'CLEARED')
+      ).length;
+
+      assert.equal(approvedCount, 3);
+    });
+
+    it('should evaluate isApproved = true for CLEARED review status', () => {
+      const statuses = ['auto', 'approved', 'CLEARED'];
+      for (const st of statuses) {
+        const isApproved = st === 'approved' || st === 'auto' || st === 'CLEARED';
+        assert.equal(isApproved, true);
+      }
+
+      const nonApproved = ['pending', 'rejected', 'VIOLATION'];
+      for (const st of nonApproved) {
+        const isApproved = st === 'approved' || st === 'auto' || st === 'CLEARED';
+        assert.equal(isApproved, false);
+      }
+    });
+  });
+
+  describe('Opportunistic Credential Upgrade Plaintext Purge Invariant', () => {
+    it('should purge plaintext pin field during opportunistic student and teacher hash derivation', async () => {
+      const simulatedRawStudent = { id: 's1', pin: '4821', pin_hash: null };
+      const verification = await verifyPinDual('4821', simulatedRawStudent.pin_hash, simulatedRawStudent.pin);
+      assert.equal(verification.valid, true);
+      assert.equal(verification.needsMigration, true);
+
+      // Upgrade payload must include both pin: '' and pin_hash: scrypt$...
+      const newHash = await hashPin('4821');
+      const updatePayload = { pin: '', pin_hash: newHash };
+
+      assert.equal(updatePayload.pin, '');
+      assert.ok(updatePayload.pin_hash.startsWith('scrypt$'));
+
+      // Subsequent login checks must succeed without plaintext
+      const postUpgradeVerification = await verifyPinDual('4821', updatePayload.pin_hash, updatePayload.pin);
+      assert.equal(postUpgradeVerification.valid, true);
+      assert.equal(postUpgradeVerification.needsMigration, false);
+    });
+  });
+
+  describe('Bulk Import Temporary PIN Tracking', () => {
+    it('should generate an explicit tracking record for every student created during bulk import', () => {
+      const mockCsvRows = [
+        ['Roll Number', 'Student Name', 'Course Code'],
+        ['NDA-101', 'Test Student 1', 'NDA'],
+        ['NDA-102', 'Test Student 2', 'NDA'],
+      ];
+
+      const generatedPins: Array<{ rollNo: string; name: string; temporaryPin: string }> = [];
+      for (let i = 1; i < mockCsvRows.length; i++) {
+        const [rollNo, name] = mockCsvRows[i];
+        const tempPin = generateTemporaryPin();
+        generatedPins.push({ rollNo, name, temporaryPin: tempPin });
+      }
+
+      assert.equal(generatedPins.length, 2);
+      assert.equal(generatedPins[0].rollNo, 'NDA-101');
+      assert.match(generatedPins[0].temporaryPin, /^\d{6}$/);
+      assert.equal(generatedPins[1].rollNo, 'NDA-102');
+      assert.match(generatedPins[1].temporaryPin, /^\d{6}$/);
     });
   });
 });

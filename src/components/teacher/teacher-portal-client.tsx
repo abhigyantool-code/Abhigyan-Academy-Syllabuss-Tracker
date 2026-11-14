@@ -26,9 +26,10 @@ import {
 interface TeacherPortalClientProps {
   data: TeacherDashboardData;
   teacherName: string;
+  mustChangePin?: boolean;
 }
 
-export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientProps) {
+export function TeacherPortalClient({ data, teacherName, mustChangePin = false }: TeacherPortalClientProps) {
   const router = useRouter();
   const { teacher, subjects, selectedSubjectId, topics, recentStudentLogs, today } = data;
 
@@ -39,11 +40,15 @@ export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientPr
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Change PIN modal state
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [oldPin, setOldPin] = useState('');
+  const [showPinModal, setShowPinModal] = useState(mustChangePin);
+  const [oldPin, setOldPin] = useState(mustChangePin ? '1234' : '');
   const [newPin, setNewPin] = useState('');
   const [pinLoading, setPinLoading] = useState(false);
-  const [pinMsg, setPinMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [pinMsg, setPinMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(
+    mustChangePin
+      ? { text: '⚠️ Mandatory Credential Rotation: You are using the default PIN (1234). Please set a secure personal PIN before continuing.', type: 'error' }
+      : null
+  );
 
   const currentSubject = subjects.find((s) => s.subject_id === selectedSubjectId) || subjects[0];
 
@@ -81,7 +86,11 @@ export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientPr
       setPinMsg({ text: 'PIN successfully updated! Remember your new PIN.', type: 'success' });
       setOldPin('');
       setNewPin('');
-      setTimeout(() => setShowPinModal(false), 2000);
+      setTimeout(() => {
+        setShowPinModal(false);
+        router.replace('/teacher');
+        router.refresh();
+      }, 1500);
     } catch (err: any) {
       setPinMsg({ text: err.message || 'Failed to update PIN', type: 'error' });
     } finally {
@@ -468,12 +477,14 @@ export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientPr
                 <KeyRound className="w-4 h-4 text-amber-400" />
                 Change Faculty Security PIN
               </h3>
-              <button
-                onClick={() => setShowPinModal(false)}
-                className="text-zinc-400 hover:text-white"
-              >
-                &times;
-              </button>
+              {!mustChangePin && (
+                <button
+                  onClick={() => setShowPinModal(false)}
+                  className="text-zinc-400 hover:text-white"
+                >
+                  &times;
+                </button>
+              )}
             </div>
 
             {pinMsg && (
@@ -518,13 +529,15 @@ export function TeacherPortalClient({ data, teacherName }: TeacherPortalClientPr
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPinModal(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                >
-                  Cancel
-                </button>
+                {!mustChangePin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPinModal(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  >
+                    Cancel
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={pinLoading}

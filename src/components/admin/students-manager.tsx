@@ -52,12 +52,15 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
     e.preventDefault();
     if (!rollNo.trim() || !name.trim()) return;
     try {
-      await createStudentAction(rollNo, name, selectedCourses);
+      const res = await createStudentAction(rollNo, name, selectedCourses);
       setRollNo('');
       setName('');
       setSelectedCourses([]);
       setShowAddModal(false);
-      setMsg({ text: 'Student created and enrolled successfully!', type: 'success' });
+      setMsg({
+        text: `Student "${name}" (${rollNo}) created! Temporary PIN: ${res.temporaryPin}`,
+        type: 'success',
+      });
     } catch (err: any) {
       setMsg({ text: err.message || 'Failed to create student', type: 'error' });
     }
@@ -86,7 +89,18 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
     try {
       const res = await bulkImportStudentsCsvAction(csvText);
       setShowBulkModal(false);
-      setMsg({ text: `Imported ${res.count} students successfully!`, type: 'success' });
+      let reportText = `Imported ${res.count} students successfully!`;
+      if (res.generatedPins && res.generatedPins.length > 0) {
+        if (res.generatedPins.length <= 5) {
+          reportText += ` Temporary PINs: ${res.generatedPins.map((p) => `${p.rollNo}: ${p.temporaryPin}`).join(', ')}`;
+        } else {
+          reportText += ` Temporary PINs generated for ${res.generatedPins.length} students. (First 5: ${res.generatedPins.slice(0, 5).map((p) => `${p.rollNo}: ${p.temporaryPin}`).join(', ')}...)`;
+        }
+      }
+      if (res.errors && res.errors.length > 0) {
+        reportText += ` (${res.errors.length} failed).`;
+      }
+      setMsg({ text: reportText, type: res.count > 0 ? 'success' : 'error' });
     } catch (err: any) {
       setMsg({ text: err.message || 'Bulk import failed', type: 'error' });
     }
@@ -95,16 +109,19 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
   const handlePinReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pinResetStudent) return;
-    if (!/^\d{4,8}$/.test(newPin)) {
+    if (newPin && !/^\d{4,8}$/.test(newPin)) {
       setMsg({ text: 'PIN must be 4–8 numeric digits.', type: 'error' });
       return;
     }
     setPinBusy(true);
     try {
-      await resetStudentPinAction(pinResetStudent.id, newPin);
+      const res = await resetStudentPinAction(pinResetStudent.id, newPin.trim() || undefined);
       setPinResetStudent(null);
       setNewPin('');
-      setMsg({ text: `PIN for ${pinResetStudent.name} reset successfully!`, type: 'success' });
+      setMsg({
+        text: `PIN for ${pinResetStudent.name} reset successfully! Temporary PIN: ${res.temporaryPin}`,
+        type: 'success',
+      });
     } catch (err: any) {
       setMsg({ text: err.message || 'PIN reset failed', type: 'error' });
     } finally {
@@ -431,20 +448,20 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
               Reset PIN — {pinResetStudent.name}
             </h3>
             <p className="text-xs text-slate-400">
-              Enter a new 4–8 digit numeric PIN for this student. Their current PIN will be replaced immediately.
+              Enter a custom 4–8 digit numeric PIN, or leave blank to automatically generate a secure 6-digit temporary PIN.
             </p>
             <form onSubmit={handlePinReset} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">New PIN (4–8 digits)</label>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">
+                  New PIN (Optional — leave empty to auto-generate)
+                </label>
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="\d{4,8}"
-                  required
                   maxLength={8}
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 849201"
+                  placeholder="Leave empty for auto-generated PIN"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>

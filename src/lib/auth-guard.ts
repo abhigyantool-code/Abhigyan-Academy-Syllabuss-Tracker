@@ -12,6 +12,7 @@ export interface AccessResult {
     label: string;
     teacherId?: string;
     studentId?: string;
+    mustChangePin?: boolean;
   } | null;
   reason?: string;
 }
@@ -105,6 +106,7 @@ export async function requireAccess(area: AccessArea | AccessArea[]): Promise<Ac
           label: session.name,
           teacherId: session.teacherId,
           studentId: session.studentId,
+          mustChangePin: session.mustChangePin,
         }
       : null,
   };

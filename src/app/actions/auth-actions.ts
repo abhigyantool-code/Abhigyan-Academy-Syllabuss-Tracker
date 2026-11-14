@@ -87,18 +87,20 @@ export async function teacherLoginAction(
     if (verification.needsMigration) {
       try {
         const newHash = await hashPin(pin.trim());
-        await pb.collection('teachers').update(teacher.id, { pin_hash: newHash });
+        await pb.collection('teachers').update(teacher.id, { pin: '', pin_hash: newHash });
       } catch (err) {
         console.warn('Teacher PIN hash opportunistic migration deferred:', err);
       }
     }
 
     // Create session
+    const isDefaultPin = pin.trim() === '1234';
     await createSession({
       userId: teacher.id,
       role: 'faculty',
       name: teacher.name,
       teacherId: teacher.id,
+      mustChangePin: isDefaultPin,
     });
 
     await logAudit({
@@ -109,7 +111,6 @@ export async function teacherLoginAction(
     });
 
     revalidatePath('/teacher');
-    const isDefaultPin = pin.trim() === '1234';
     return { success: true, mustChangePin: isDefaultPin };
   } catch (err: any) {
     if (inFlightReserved) {
@@ -395,6 +396,17 @@ export async function changeStudentPinAction(
       },
     });
 
+    if (session?.role === 'student') {
+      await createSession({
+        userId: student.id,
+        role: 'student',
+        name: student.name,
+        studentId: student.id,
+        mustChangePin: false,
+      });
+    }
+
+    revalidatePath('/student');
     revalidatePath('/submit');
     return { success: true };
   } catch (err: any) {
@@ -464,6 +476,14 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
       action: 'UPDATE_TEACHER_PIN',
       entity: 'teachers',
       entityId: session.teacherId,
+    });
+
+    await createSession({
+      userId: session.userId,
+      role: 'faculty',
+      name: session.name,
+      teacherId: session.teacherId,
+      mustChangePin: false,
     });
 
     revalidatePath('/teacher');
@@ -580,11 +600,13 @@ export async function studentLoginAction(
     }
 
     // Create student session
+    const isDefaultPin = pin.trim() === '1234';
     await createSession({
       userId: student.id,
       role: 'student',
       name: student.name,
       studentId: student.id,
+      mustChangePin: isDefaultPin,
     });
 
     await logAudit({
@@ -593,7 +615,6 @@ export async function studentLoginAction(
       entityId: student.id,
     });
 
-    const isDefaultPin = pin.trim() === '1234';
     return { success: true, mustChangePin: isDefaultPin };
   } catch (err: any) {
     if (inFlightReserved && resolvedStudentId) {

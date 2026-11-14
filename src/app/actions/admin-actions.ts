@@ -754,8 +754,8 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
 
     try {
       let pinToUse = customPin;
-      if (pinToUse && /^\d{4,8}$/.test(pinToUse)) {
-        // use provided valid numeric PIN from CSV
+      if (pinToUse && validateNewPinStrength(pinToUse).valid) {
+        // use provided strong non-trivial numeric PIN from CSV
       } else {
         pinToUse = generateTemporaryPin();
       }

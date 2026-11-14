@@ -48,6 +48,7 @@ async function main() {
     'entries',
     'class_codes',
     'audit_log',
+    'teaching_records',
   ];
 
   console.log(`💾 Exporting JSON snapshots to ${backupDir}...`);

@@ -12,7 +12,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 interface TeacherPageProps {
-  searchParams: Promise<{ subject?: string }>;
+  searchParams: Promise<{ subject?: string; mustChangePin?: string }>;
 }
 
 export default async function TeacherPage({ searchParams }: TeacherPageProps) {
@@ -32,5 +32,13 @@ export default async function TeacherPage({ searchParams }: TeacherPageProps) {
     redirect('/teacher/login');
   }
 
-  return <TeacherPortalClient data={data} teacherName={session.name} />;
+  const mustChangePin = Boolean(session.mustChangePin || resolvedParams.mustChangePin === 'true');
+
+  return (
+    <TeacherPortalClient
+      data={data}
+      teacherName={session.name}
+      mustChangePin={mustChangePin}
+    />
+  );
 }

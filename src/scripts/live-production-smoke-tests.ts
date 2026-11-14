@@ -16,7 +16,7 @@ import { getTeacherDashboardData } from '../lib/teacher-data';
 import { analyzeMisuseFlags } from '../lib/submission-validation';
 import { verifyPinDual } from '../lib/pin-hash';
 
-const PROD_URL = 'https://syllabus360.abhigyanintelligence.cloud';
+const PROD_URL = process.env.PROD_URL || 'https://syllabus360.abhigyanintelligence.cloud';
 
 export interface SmokeTestResults {
   healthCheck: boolean;

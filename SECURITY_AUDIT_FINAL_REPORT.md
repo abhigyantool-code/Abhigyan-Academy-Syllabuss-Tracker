@@ -82,10 +82,12 @@ To ensure zero service disruption during credential life-cycles:
   - Token rejected if `createdAt > Date.now() + 60 * 1000` (Clock Skew Defense).
   - Production requires `SESSION_SECRET` length $\ge 32$ characters; fails closed on startup if absent.
 
-### 3.4 Temporary PIN Generation & Lifecycle Security (NEW-04, NEW-05, NEW-06)
+### 3.4 Temporary PIN Generation & Lifecycle Security (NEW-04 through NEW-09)
 - **Unique Temporary PIN Generator:** Implemented `generateTemporaryPin()` in `src/lib/pin-hash.ts` generating cryptographically random 6-digit non-trivial numeric PINs (rejection of repeating or sequential patterns).
-- **Zero Plaintext Write Invariant:** Admin resets (`resetStudentPinAction`, `resetTeacherPinAction`), user PIN changes (`changeStudentPinAction`, `updateTeacherPinAction`), and bulk imports strictly store salted scrypt hashes in `pin_hash` and set `pin: ''`.
-- **Mandatory PIN Change Policy:** `studentLoginAction` and `teacherLoginAction` return `mustChangePin: true` when authenticated with default PIN `1234`, forcing immediate credential rotation.
+- **Zero Plaintext Write Invariant:** Admin resets (`resetStudentPinAction`, `resetTeacherPinAction`), user PIN changes (`changeStudentPinAction`, `updateTeacherPinAction`), opportunistic login migrations (`student-guard.ts`, `teacherLoginAction`), and bulk imports strictly store salted scrypt hashes in `pin_hash` and set `pin: ''`.
+- **Mandatory PIN Change Policy & UI Lockdown:** `studentLoginAction` and `teacherLoginAction` store `mustChangePin: isDefaultPin` in the signed session token and return it to clients. When active, both the Student Portal (`StudentPinModal`) and Faculty Portal (`TeacherPortalClient`) lock down the interface with a non-dismissable modal (omitting close and cancel buttons) until the user sets a strong personal PIN.
+- **Bulk CSV Strong PIN Validation:** `bulkImportStudentsCsvAction` runs custom PINs from CSV through `validateNewPinStrength()`. Any weak or trivial pattern (e.g. `1234`, `0000`) is rejected and replaced with a cryptographically secure 6-digit temporary PIN.
+- **Admin UI Temporary Credential Display:** `faculty-manager.tsx` and `students-manager.tsx` display generated temporary PINs in success notifications so administrators can securely hand them out to faculty and students.
 - **Redaction of Default PINs from UI:** All badges, labels, and placeholders advertising "Default: 1234" have been permanently removed from client forms.
 - **Session Cookie Production Security:** Session cookies enforce `secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_INSECURE !== 'true'`, `httpOnly: true`, and `sameSite: 'lax'`.
 

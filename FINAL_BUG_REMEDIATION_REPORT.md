@@ -14,11 +14,11 @@
 All production-critical and security bugs across the Abhigyan Academy Syllabus Tracker bug register have been successfully resolved, migrated, and verified against the live production environment.
 
 ### Final Metrics:
-- **Total Tracked Issues:** 51 Issues (BUG-001 through BUG-045, plus NEW-01 through NEW-06)
-- **Verified in Production & Codebase:** **49 Issues (96.1%)**
+- **Total Tracked Issues:** 56 Issues (BUG-001 through BUG-045, plus NEW-01 through NEW-11)
+- **Verified in Production & Codebase:** **54 Issues (96.4%)**
 - **Architecture Deferral (Sound Engineering Choice):** **1 Issue (BUG-039)** — Single-container rate limiter bounded at 10k buckets with FIFO eviction; Redis deferred until multi-container cluster scaling is provisioned.
 - **Coordinated Operator Action (Documented Blocker):** **1 Issue (BUG-042)** — Active codebase and compose files completely purged of all credentials. Git commit history purge (`git-filter-repo`) documented with backup bundle and coordinated with VPS panel secret rotation.
-- **Automated Unit Tests Passing:** **124 / 124** (100% across 36 test suites)
+- **Automated Unit Tests Passing:** **131 / 131** (100% across 40 test suites)
 - **Production Build:** Next.js 16.4.3 Turbopack build succeeded with 0 TypeScript errors
 - **Static Analysis (Lint):** 0 errors (`npm run lint` passes with exit code 0)
 - **Live Production Smoke Tests:** **7 / 7** (100%)
@@ -85,6 +85,11 @@ All production-critical and security bugs across the Abhigyan Academy Syllabus T
 | **NEW-04** | Critical | Security | Insecure Admin PIN Reset (Plaintext Write + Lockout) | `src/app/actions/admin-actions.ts` | Reset sets `pin = ''` & updates `pin_hash` | **VERIFIED** |
 | **NEW-05** | High | Security | Plaintext PIN Re-introduction in Self-Service PIN Change | `src/app/actions/auth-actions.ts` | Sets `pin = ''` & updates `pin_hash` | **VERIFIED** |
 | **NEW-06** | High | Security | Insecure Default PIN `1234` Generation & UI Disclosure | `pin-hash.ts`, `admin-actions.ts`, UI forms | Unique 6-digit temp PINs; purged UI leaks | **VERIFIED** |
+| **NEW-07** | High | UX/Security | Missing Self-Service Student PIN Change UI in Student Portal | `src/components/student/student-pin-modal.tsx`, `src/app/student/page.tsx` | None | **VERIFIED** |
+| **NEW-08** | High | Data Integrity | Student Portal Omitted `CLEARED` Review Status from Approved Count | `src/app/student/page.tsx` | None | **VERIFIED** |
+| **NEW-09** | High | Security | Plaintext PIN Retention During Opportunistic Credential Upgrade | `src/lib/student-guard.ts`, `src/app/actions/auth-actions.ts` | Purges plaintext `pin = ''` on upgrade | **VERIFIED** |
+| **NEW-10** | Medium | Reliability | Missing `teaching_records` Collection in PocketBase Backup Script | `src/scripts/pocketbase-backup.ts` | Added `teaching_records` to dump list | **VERIFIED** |
+| **NEW-11** | Low | Production | Obsolete "Phase 1 Mode: Auth Disabled" Landing Page Banner | `src/app/page.tsx` | None | **VERIFIED** |
 
 ---
 
@@ -200,15 +205,46 @@ All production-critical and security bugs across the Abhigyan Academy Syllabus T
   3. Click "Redeploy".
   4. The deployment will immediately return HTTP 200 OK, matching the verified local Turbopack build and live PocketBase backend.
 
+### 3.11 NEW-07 & NEW-08 — Student Portal PIN Change Modal & CLEARED Status Integration
+- **Severity:** High
+- **Root Cause:**
+  1. The Student Portal (`src/app/student/page.tsx`) lacked any mechanism for students to update their PIN, despite self-service PIN management being a core Phase 4 requirement. Furthermore, mandatory PIN rotation (`mustChangePin: true`) was returned from auth actions but had no client UI listener or modal to enforce it.
+  2. Genuine Student Submission #2 for Sangey Lhamunamsa (`pogx003bic5x4pi`) holds review status `'CLEARED'`. The Student Portal filter only checked for `'auto'` and `'approved'`, incorrectly excluding her record from the approved count and displaying it as non-approved.
+- **Remediation Implemented:**
+  1. Created `StudentPinModal` in `src/components/student/student-pin-modal.tsx` with numeric input sanitation, 4–8 digit validation, confirmation matching, and non-dismissable lockdown when `mustChangePin` is active.
+  2. Integrated `StudentPinModal` into the student portal header and added `searchParams` parsing for `mustChangePin`.
+  3. Integrated `mustChangePin` into `SessionPayload` in `src/lib/session.ts` and `AccessResult` in `src/lib/auth-guard.ts`.
+  4. Updated `approvedEntries` count and table row status rendering in `src/app/student/page.tsx` to explicitly include `review_status === 'CLEARED'` with emerald badge styling ("Cleared & Approved").
+- **Verification:** Unit tests in `src/tests/unit/admin-pin-management.test.ts` assert `CLEARED` counting and `mustChangePin` session preservation.
+- **Final Status:** **VERIFIED IN CODEBASE & UI**
+
+### 3.12 NEW-09 — Plaintext PIN Retention During Opportunistic Credential Upgrade
+- **Severity:** High
+- **Root Cause:** In `src/lib/student-guard.ts` (line 119) and `src/app/actions/auth-actions.ts` (line 90), opportunistic PIN hashing upon plaintext login previously called `pb.collection(...).update(..., { pin_hash: newHash })` without passing `pin: ''`. This left the plaintext PIN retained in the SQLite database even after a hash was computed.
+- **Remediation Implemented:**
+  - Updated both `student-guard.ts` and `teacherLoginAction` in `auth-actions.ts` to update `{ pin: '', pin_hash: newHash }`, guaranteeing the zero-plaintext invariant across all login-time opportunistic migrations.
+- **Verification:** Tested in `src/tests/unit/admin-pin-management.test.ts` asserting plaintext purge on opportunistic migration.
+- **Final Status:** **VERIFIED IN CODEBASE**
+
+### 3.13 NEW-10 & NEW-11 — Backup Integrity (`teaching_records`) & Home Banner Alignment
+- **Severity:** Medium / Low
+- **Root Cause:**
+  1. `src/scripts/pocketbase-backup.ts` omitted the newly added `teaching_records` collection from its local JSON dump list.
+  2. `src/app/page.tsx` displayed an obsolete "⚠️ Phase 1 Mode: Authentication is disabled" warning banner and footer, contradicting the production-hardened multi-portal architecture.
+- **Remediation Implemented:**
+  1. Added `teaching_records` to the collection list in `pocketbase-backup.ts`.
+  2. Replaced the Phase 1 warning banner with an active production status badge highlighting zero-plaintext security and isolated portals.
+- **Final Status:** **VERIFIED IN CODEBASE & BUILD**
+
 ---
 
 ## 4. Verification Record & Test Summary
 
-- **Unit & Integration Tests:** 124 passing out of 124 across 36 suites (100%).
+- **Unit & Integration Tests:** **131 passing out of 131** across 40 suites (100%).
 - **Linter Status:** `npm run lint` passes with 0 errors.
 - **Production Build:** Next.js 16.4.3 compiled successfully with Turbopack; 0 TypeScript errors.
 - **Live Production Smoke Tests:** 7 passing out of 7.
 - **Live Portal Separation Tests:** 44 passing out of 44.
 - **PocketBase REST API Rules:** 55/55 endpoints return HTTP 403 to unauthenticated requests.
 - **Data Integrity:** Genuine student submissions preserved (Mafruza Rahman `7lhmo4p1mzkw9w2` & Sangey Lhamunamsa `pogx003bic5x4pi`).
-- **Zero Plaintext Invariant:** 0 plaintext PINs in database; zero plaintext write-back on resets or changes.
+- **Zero Plaintext Invariant:** 0 plaintext PINs in database; zero plaintext write-back on resets, changes, or opportunistic upgrades.

@@ -116,7 +116,7 @@ export async function verifyStudent(
     if (verification.needsMigration) {
       try {
         const newHash = await hashPin(pin);
-        await pb.collection('students').update(student.id, { pin_hash: newHash });
+        await pb.collection('students').update(student.id, { pin: '', pin_hash: newHash });
       } catch (migrateErr) {
         // Non-blocking: background upgrade error should not fail user request
         console.warn('Opportunistic PIN hash upgrade deferred:', migrateErr);

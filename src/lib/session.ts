@@ -27,6 +27,7 @@ export interface SessionPayload {
   studentId?: string;
   courseId?: string;
   createdAt: number;
+  mustChangePin?: boolean;
 }
 
 // Signs and encodes payload

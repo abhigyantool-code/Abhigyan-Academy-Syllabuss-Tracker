@@ -182,7 +182,11 @@ To guarantee that database migrations are not undermined by subsequent runtime o
    - Auto-generates unique 6-digit temporary PINs for each student, derives scrypt hashes, and stores `pin: ''`.
 4. **Direct Creation Actions (`createStudentAction`, `createTeacherAction`):**
    - Directly stores salted scrypt hash into `pin_hash` and clears `pin: ''`.
+5. **Opportunistic Credential Upgrade (`student-guard.ts`, `teacherLoginAction`):**
+   - Automatically writes `{ pin: '', pin_hash: newHash }` during authentication if an unhashed account logs in, immediately purging plaintext (NEW-09).
+6. **Comprehensive Disaster Recovery Snapshot (`pocketbase-backup.ts`):**
+   - Verified all 12 operational collections (including `teaching_records`) are exported to JSON and binary ZIP archives (NEW-10).
 
 ### 7.2 Verification Result
-- Verified in `src/tests/unit/admin-pin-management.test.ts` (124/124 tests passing).
+- Verified in `src/tests/unit/admin-pin-management.test.ts` (131/131 tests passing across 40 suites).
 - Zero plaintext PINs can be written to the production database via any application path.

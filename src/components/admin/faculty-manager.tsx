@@ -51,11 +51,14 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
     e.preventDefault();
     if (!name.trim()) return;
     try {
-      await createTeacherAction(name, phone || null);
+      const res = await createTeacherAction(name, phone || null);
       setName('');
       setPhone('');
       setShowAddModal(false);
-      setMsg({ text: 'Faculty member added successfully!', type: 'success' });
+      setMsg({
+        text: `Faculty member "${name}" added successfully! Temporary PIN: ${res.temporaryPin}`,
+        type: 'success',
+      });
     } catch (err: any) {
       setMsg({ text: err.message || 'Failed to add teacher', type: 'error' });
     }
@@ -103,16 +106,19 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
   const handlePinReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pinResetTeacher) return;
-    if (!/^\d{4,8}$/.test(newPin)) {
+    if (newPin && !/^\d{4,8}$/.test(newPin)) {
       setMsg({ text: 'PIN must be 4–8 numeric digits.', type: 'error' });
       return;
     }
     setPinBusy(true);
     try {
-      await resetTeacherPinAction(pinResetTeacher.id, newPin);
+      const res = await resetTeacherPinAction(pinResetTeacher.id, newPin.trim() || undefined);
       setPinResetTeacher(null);
       setNewPin('');
-      setMsg({ text: `PIN for ${pinResetTeacher.name} reset successfully!`, type: 'success' });
+      setMsg({
+        text: `PIN for ${pinResetTeacher.name} reset successfully! Temporary PIN: ${res.temporaryPin}`,
+        type: 'success',
+      });
     } catch (err: any) {
       setMsg({ text: err.message || 'PIN reset failed', type: 'error' });
     } finally {
@@ -335,20 +341,20 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
               Reset PIN — {pinResetTeacher.name}
             </h3>
             <p className="text-xs text-slate-400">
-              Enter a new 4–8 digit numeric PIN for this faculty member. Their current PIN will be replaced immediately.
+              Enter a custom 4–8 digit numeric PIN, or leave blank to automatically generate a secure 6-digit temporary PIN.
             </p>
             <form onSubmit={handlePinReset} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">New PIN (4–8 digits)</label>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">
+                  New PIN (Optional — leave empty to auto-generate)
+                </label>
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="\d{4,8}"
-                  required
                   maxLength={8}
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 849201"
+                  placeholder="Leave empty for auto-generated PIN"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>

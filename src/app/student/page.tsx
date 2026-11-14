@@ -15,6 +15,7 @@ import {
   Layers,
   Sparkles,
 } from 'lucide-react';
+import { StudentPinModal } from '@/components/student/student-pin-modal';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,9 +24,15 @@ export const metadata = {
   description: 'View your personal syllabus progress, classroom submissions, and faculty review feedback.',
 };
 
-export default async function StudentDashboardPage() {
+interface StudentPageProps {
+  searchParams?: Promise<{ mustChangePin?: string }>;
+}
+
+export default async function StudentDashboardPage({ searchParams }: StudentPageProps) {
   const access = await requireAccess('student');
   const studentId = access.user?.studentId || access.user?.id;
+  const resolvedParams = searchParams ? await searchParams : {};
+  const mustChangePin = Boolean(access.user?.mustChangePin || resolvedParams.mustChangePin === 'true');
 
   const pb = await getPbClient();
 
@@ -62,7 +69,7 @@ export default async function StudentDashboardPage() {
 
   const totalLogged = entries.length;
   const approvedEntries = entries.filter(
-    (e) => e.status === 'covered' && (e.review_status === 'auto' || e.review_status === 'approved')
+    (e) => e.status === 'covered' && (e.review_status === 'auto' || e.review_status === 'approved' || e.review_status === 'CLEARED')
   ).length;
   const pendingReview = entries.filter((e) => e.review_status === 'pending').length;
   const revisionCount = entries.filter(
@@ -87,6 +94,8 @@ export default async function StudentDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <StudentPinModal rollNo={student.roll_no} mustChangePin={mustChangePin} />
+
             <Link
               href="/submit"
               className="flex items-center gap-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-xl transition-all font-semibold shadow-md shadow-indigo-600/20"
@@ -253,7 +262,9 @@ export default async function StudentDashboardPage() {
                     const course = (entry.expand as any)?.course;
 
                     const isApproved =
-                      entry.review_status === 'approved' || entry.review_status === 'auto';
+                      entry.review_status === 'approved' ||
+                      entry.review_status === 'auto' ||
+                      entry.review_status === 'CLEARED';
 
                     return (
                       <tr key={entry.id} className="hover:bg-zinc-800/30 transition-colors">
@@ -301,6 +312,8 @@ export default async function StudentDashboardPage() {
                               ? 'Auto-Approved'
                               : entry.review_status === 'approved'
                               ? 'Faculty Approved'
+                              : entry.review_status === 'CLEARED'
+                              ? 'Cleared & Approved'
                               : entry.review_status === 'pending'
                               ? 'Pending Review'
                               : entry.review_status}

@@ -66,7 +66,11 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty', portalMode 
     try {
       const res = await studentLoginAction(studentRollNo, studentPin);
       if (res.success) {
-        router.push('/student');
+        if (res.mustChangePin) {
+          router.push('/student?mustChangePin=true');
+        } else {
+          router.push('/student');
+        }
         router.refresh();
       } else if (res.error) {
         setError(res.error);
@@ -95,7 +99,11 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty', portalMode 
     try {
       const res = await teacherLoginAction(selectedTeacherId, pin);
       if (res.success) {
-        router.push('/teacher');
+        if (res.mustChangePin) {
+          router.push('/teacher?mustChangePin=true');
+        } else {
+          router.push('/teacher');
+        }
         router.refresh();
       } else if (res.error) {
         setError(res.error);

@@ -15,12 +15,12 @@
 This document certifies the complete production readiness, deployment verification, and empirical stability of the **Syllabus Tracker (Abhigyan Academy)**.
 
 ### Master Verification Results:
-- **Unit & Integration Test Suite:** **124 / 124 PASSING** across 36 suites (0 failures).
+- **Unit & Integration Test Suite:** **131 / 131 PASSING** across 40 suites (0 failures).
 - **Production Build:** Successfully compiled with Next.js 16.4.3 (Turbopack), TypeScript passed cleanly with 0 type errors.
 - **Static Analysis (Lint):** `npm run lint` passes with 0 errors.
 - **Live Production Smoke Test Suite:** **7 / 7 PASSING** (0 failures).
 - **Live Production Portal Separation Suite:** **44 / 44 PASSING** (0 failures).
-- **Database Schema & Integrity Invariant:** All 12 collections indexed (32 indexes), 75 students and 8 teachers hashed with scrypt, 0 plaintext PINs remaining, zero plaintext re-introduction on reset/change, 6 historical endorsements migrated into `teaching_records`, both genuine student submissions (`7lhmo4p1mzkw9w2` and `pogx003bic5x4pi`) verified 100% intact.
+- **Database Schema & Integrity Invariant:** All 12 collections indexed (32 indexes), 75 students and 8 teachers hashed with scrypt, 0 plaintext PINs remaining, zero plaintext re-introduction on reset/change/opportunistic upgrade, 6 historical endorsements migrated into `teaching_records`, both genuine student submissions (`7lhmo4p1mzkw9w2` and `pogx003bic5x4pi`) verified 100% intact.
 
 ---
 
@@ -349,4 +349,4 @@ Target: https://syllabus360.abhigyanintelligence.cloud
 
 ## 4. Final Deployment Sign-Off
 
-The Syllabus Tracker codebase is hardened, 100% covered by 124 passing unit tests, builds cleanly in Next.js Turbopack with zero TypeScript errors, passes ESLint with zero errors, and enforces strict zero-plaintext PIN storage and unique temporary PIN generation. Production rollout is complete upon operator configuration of environment variables in the Coolify VPS console.
+The Syllabus Tracker codebase is hardened, 100% covered by 131 passing unit tests across 40 suites, builds cleanly in Next.js Turbopack with zero TypeScript errors, passes ESLint with zero errors, and enforces strict zero-plaintext PIN storage, non-dismissable mandatory PIN rotation, and unique temporary PIN generation. Production rollout is complete upon operator configuration of environment variables in the Coolify VPS console.
