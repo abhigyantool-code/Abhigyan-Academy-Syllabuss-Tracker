@@ -1,12 +1,24 @@
 import { chromium, BrowserContext } from '@playwright/test';
 import PocketBase from 'pocketbase';
-import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { hashPin, markHashAsTemporary } from '../lib/pin-hash';
 import { signPayload } from '../lib/session';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+const envPath = path.resolve(process.cwd(), '.env.local');
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx > 0) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+}
 
 const PROD_URL = 'https://syllabus360.abhigyanintelligence.cloud';
 const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://stracker.abhigyanintelligence.cloud';
