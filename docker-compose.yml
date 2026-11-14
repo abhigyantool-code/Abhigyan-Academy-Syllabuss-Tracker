@@ -10,11 +10,11 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@db:5432/syllabus_tracker}
-      - SESSION_SECRET=${SESSION_SECRET:-c68f9a2e1d4b8e7c5f3a0d9b8e7f6a5c4d3b2a1e0f9a8b7c6d5e4f3a2b1c0d9e}
-      - ADMIN_MASTER_PASSWORD=${ADMIN_MASTER_PASSWORD:-AbhigyanAdmin2026!}
-      - REQUIRE_PIN=true
-      - REQUIRE_CLASS_CODE=false
+      - DATABASE_URL=${DATABASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - ADMIN_MASTER_PASSWORD=${ADMIN_MASTER_PASSWORD}
+      - REQUIRE_PIN=${REQUIRE_PIN:-true}
+      - REQUIRE_CLASS_CODE=${REQUIRE_CLASS_CODE:-false}
     depends_on:
       - db
 
@@ -24,7 +24,7 @@ services:
     environment:
       POSTGRES_DB: syllabus_tracker
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./database/production_init.sql:/docker-entrypoint-initdb.d/init.sql:ro
