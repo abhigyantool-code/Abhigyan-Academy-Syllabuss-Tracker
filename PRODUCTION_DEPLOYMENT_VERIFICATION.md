@@ -5,7 +5,7 @@
 **Hosting Environment:** Hostinger Coolify VPS (Docker Standalone Runner)  
 **Node.js / Framework:** Node.js v20 / Next.js 16.4.3 (Turbopack) / React 19.3.0  
 **Backend Engine:** PocketBase v0.28.2 (Self-Hosted SQLite)  
-**Deployed Commit:** `231b9d4` (Predecessors: `ca96e25`, `fe9331f`)  
+**Deployed Commit:** `321e6a8` (Predecessors: `38c48e8`, `7025246`, `c212aea`, `d6d03f9`, `231b9d4`)  
 **Date of Verification:** 2026-11-14  
 **Verification Auditor:** Antigravity Integration & QA Reviewer  
 
@@ -16,12 +16,13 @@
 This document certifies the complete production readiness, deployment verification, and empirical stability of the **Syllabus Tracker (Abhigyan Academy)**.
 
 ### Master Verification Results:
-- **Unit & Integration Test Suite:** **131 / 131 PASSING** across 40 suites (0 failures).
+- **Unit & Integration Test Suite:** **137 / 137 PASSING** across 41 suites (0 failures).
 - **Production Build:** Successfully compiled with Next.js 16.4.3 (Turbopack), TypeScript passed cleanly with 0 type errors.
 - **Static Analysis (Lint):** `npm run lint` passes with 0 errors.
 - **Live Production Smoke Test Suite:** **7 / 7 PASSING** (0 failures).
 - **Live Production Portal Separation Suite:** **44 / 44 PASSING** (0 failures).
 - **Database Schema & Integrity Invariant:** All 12 collections indexed (32 indexes), 75 students and 8 teachers hashed with scrypt, 0 plaintext PINs remaining, zero plaintext re-introduction on reset/change/opportunistic upgrade, 6 historical endorsements migrated into `teaching_records`, both genuine student submissions (`7lhmo4p1mzkw9w2` and `pogx003bic5x4pi`) verified 100% intact.
+- **Coolify Production Environment:** Directly populated all production environment variables via Coolify API (`4|IhXnw...`), rotated `SESSION_SECRET` (64-character hex key), removed all fallback credentials from compose files, verified 0 secrets in repository tree (`git grep` = 0).
 
 ---
 
