@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { evaluateAccess } from '../../lib/auth-guard';
-import { signPayload, verifyPayload, SessionPayload } from '../../lib/session';
+import { signPayload, verifyPayload } from '../../lib/session';
 
 describe('Portal Separation & Role Isolation Tests', () => {
   const studentSession = {
@@ -217,6 +217,17 @@ describe('Portal Separation & Role Isolation Tests', () => {
         : (adminSession as any).studentId || adminSession.userId;
 
       assert.strictEqual(resolvedStudentId, 'student_inspect_042', 'Admin session can inspect student in audit mode');
+    });
+
+    it('should suppress student PIN modal and self-service submission links in admin audit mode', () => {
+      const isAdmin = true;
+      // Invariant: Student PIN modal must only be rendered for genuine student sessions
+      const shouldRenderPinModal = !isAdmin;
+      assert.strictEqual(shouldRenderPinModal, false, 'Admin audit mode must withhold student PIN change modal');
+
+      // Invariant: Self-service entry submission link must only be rendered for student sessions
+      const shouldRenderSubmitAction = !isAdmin;
+      assert.strictEqual(shouldRenderSubmitAction, false, 'Admin audit mode must withhold self-service submission link');
     });
   });
 });

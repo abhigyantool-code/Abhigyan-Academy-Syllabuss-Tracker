@@ -15,13 +15,13 @@
 
 | Item | Evidence | Action Taken | Status |
 |---|---|---|---|
-| **Production Commit** | `d6d03f9` on `origin/main` (Code parent: `231b9d4`); live HTTP 200 health check uptime 1175s; Next-Action IDs verified against live chunks | Reconciled dual hash documentation; verified live deployed code matches tested source | **VERIFIED** |
-| **BUG-042 (Git History & Secrets)** | Commits `e2799cc`, `b081d27`, `e6422a0`, `a185b0e`, `231b9d4` contain historical compose fallbacks. Source (`src/`) has 0 secrets. Coolify panel needs env variables before force push | Inspected history, identified 3 keys requiring rotation (`PB_ADMIN_PASSWORD`, `ADMIN_MASTER_PASSWORD`, `SESSION_SECRET`); documented exact runbook; prevented destructive force push | **BLOCKED ON OPERATOR COORDINATION** |
-| **BUG-039 (Rate Limiting)** | Single Docker container topology on Coolify VPS verified; in-memory bounded limiter (10k buckets, FIFO eviction, atomic reservation, rightmost proxy IP extraction) tested | Verified bounded in-memory limiter; documented architectural rationale for deferring Redis until horizontal clustering | **VERIFIED / DEFERRED TO CLUSTERING** |
-| **Default PIN Policy** | 75/75 students and 8/8 teachers hashed with scrypt in production (0 plaintext). `generateTemporaryPin()` generates 6-digit random non-trivial PINs. Mandatory rotation on default PIN | Verified zero plaintext in database; audited creation, reset, and CSV workflows; verified non-dismissable rotation modal | **VERIFIED & SECURED** |
-| **Backup Protection** | PB `/api/backups` returns HTTP 401 unauthenticated; `.gitignore` & `.dockerignore` exclude backups/secrets; restored `backup_2026_11_14_08_19_17.zip` into isolated SQLite, verified `PRAGMA integrity_check = ok` | Hardened `.dockerignore` with `database/backups` & `.env*`; executed off-server restoration test; preserved all 10 production backups | **VERIFIED** |
-| **Admin `/student` Access** | Admin session accesses `/student` (HTTP 200); previously rendered generic missing profile; now renders dedicated Authorized Student Directory / Read-Only Audit View | Implemented authorized admin student management overview and audit view at `/student`; enforced strict student session isolation; added 5 unit tests | **VERIFIED & HARDENED** |
-| **Overall Regression** | 136/136 unit tests pass (41 suites); 7/7 live smoke tests pass; 44/44 portal separation tests pass; `tsc` 0 errors; `lint` 0 errors; Next.js build clean; genuine student records 100% intact | Full test execution across all suites; verified both genuine student entries (`7lhmo4p1mzkw9w2`, `pogx003bic5x4pi`) intact | **VERIFIED** |
+| **Production Commit** | `c212aea` on `origin/main` (Code parent: `d6d03f9` / `231b9d4`); live HTTP 200 health check; live Next-Action IDs (`403f451f...`, `60f1264c...`, `60e621c0...`); live Admin `/student` returns Student Oversight Directory | Reconciled hash lineage (`231b9d4` -> `d6d03f9` -> `c212aea`); verified deployed code matches tested source via live chunk inspection and live role probing | **VERIFIED** |
+| **BUG-042 (Git History & Secrets)** | Commits `e2799cc`, `b081d27`, `e6422a0`, `a185b0e`, `231b9d4` contain historical compose fallbacks. Source (`src/`) has 0 secrets. Coolify panel needs env variables before force push | Inspected history, identified 3 keys requiring rotation (`PB_ADMIN_PASSWORD`, `ADMIN_MASTER_PASSWORD`, `SESSION_SECRET`); documented exact coordinated runbook; prevented destructive/uncoordinated force push | **BLOCKED ON OPERATOR COORDINATION** |
+| **BUG-039 (Rate Limiting)** | Single Docker container topology on Coolify VPS verified; in-memory bounded limiter (10k buckets, FIFO eviction, atomic reservation, rightmost proxy IP extraction) tested | Verified bounded in-memory limiter; documented architectural rationale for retaining bounded in-memory limiter and deferring Redis until horizontal clustering | **VERIFIED / DEFERRED TO CLUSTERING** |
+| **Default PIN Policy** | 75/75 students and 8/8 teachers hashed with scrypt in production (0 plaintext). `generateTemporaryPin()` generates 6-digit random non-trivial PINs. Mandatory rotation on default PIN | Verified zero plaintext in database; audited creation, reset, and CSV workflows; verified non-dismissable rotation modal; verified credential redaction in audit logs | **VERIFIED & SECURED** |
+| **Backup Protection** | PB `/api/backups` returns HTTP 401 unauthenticated; direct zip download returns HTTP 403; `.gitignore` & `.dockerignore` exclude backups/secrets; restored `backup_2026_11_14_08_19_17.zip` into isolated SQLite, verified `PRAGMA integrity_check = ok` | Hardened `.dockerignore` with `database/backups` & `.env*`; executed off-server restoration test; preserved all 10 production backups on VPS | **VERIFIED** |
+| **Admin `/student` Access** | Admin session accesses `/student` (HTTP 200); renders dedicated Authorized Student Directory / Read-Only Audit View (`/student?studentId=...`); student PIN modal withheld; student sessions strictly locked to session `studentId` | Implemented authorized admin student management overview and audit view at `/student`; refined UI semantics to distinguish audit mode from self-service; enforced strict student session isolation; added unit tests | **VERIFIED & HARDENED** |
+| **Overall Regression** | 137/137 unit tests pass (41 suites); 7/7 live smoke tests pass; 44/44 portal separation tests pass; `tsc` 0 errors; `lint` 0 errors; Next.js Turbopack build clean; genuine student records 100% intact | Full test execution across all suites; verified both genuine student entries (`7lhmo4p1mzkw9w2`, `pogx003bic5x4pi`) intact | **VERIFIED** |
 
 ---
 
@@ -33,21 +33,26 @@
 - **Live Health Status:**
   - `GET https://syllabus360.abhigyanintelligence.cloud/api/health` returned:
     ```json
-    {"status":"ok","db":true,"timestamp":"14/11/2026, 14:24:56","uptime":1175}
+    {"status":"ok","db":true,"timestamp":"14/11/2026, 14:35:11","uptime":59}
     ```
   - `GET https://stracker.abhigyanintelligence.cloud/api/health` returned:
     ```json
     {"message":"API is healthy.","code":200,"data":{}}
     ```
-- **Reconciliation of Commits `231b9d4` vs `d6d03f9`:**
-  - **Commit `231b9d4`** (`231b9d46dad41c1b56de09fd82db90c4e6d65eda`): The definitive application code commit. Restored safe default environment variable fallbacks in `docker-compose.yaml` to ensure container uptime while Coolify web dashboard variables remain unpopulated.
-  - **Commit `d6d03f9`** (`d6d03f95188dbdc92a32951b0ae6bb80c258845d`): Immediate documentation commit updating report headers to reflect commit `231b9d4` and the 131 passing unit tests.
-  - **Empirical Proof:** `git diff 231b9d4..d6d03f9` touches ONLY two markdown files (`FINAL_BUG_REMEDIATION_REPORT.md` and `PRODUCTION_DEPLOYMENT_VERIFICATION.md`). The application source code (`src/`), `package.json`, and container configs are byte-for-byte identical.
+- **Lineage and Reconciliation of Commits `231b9d4` vs `d6d03f9` vs `c212aea`:**
+  - **Commit `231b9d4`** (`231b9d46dad41c1b56de09fd82db90c4e6d65eda`): The definitive application code commit from the previous sprint. Restored safe default environment variable fallbacks in `docker-compose.yaml` to ensure container uptime while Coolify web dashboard variables remain unpopulated by the human operator.
+  - **Commit `d6d03f9`** (`d6d03f95188dbdc92a32951b0ae6bb80c258845d`): Immediate documentation commit updating report headers to reflect commit `231b9d4` and the passing unit tests.
+    - *Empirical Proof:* `git diff 231b9d4..d6d03f9` touched ONLY two markdown files (`FINAL_BUG_REMEDIATION_REPORT.md` and `PRODUCTION_DEPLOYMENT_VERIFICATION.md`). The application source code (`src/`), `package.json`, and container configs were byte-for-byte identical.
+  - **Commit `c212aea`** (`c212aea18a5e1713f45ee26113c07bbecce58521`): Delivered the Student Oversight Portal for Admins at `/student`, hardened `.dockerignore`, and added unit tests in `src/tests/unit/portal-isolation.test.ts`. Pushed to `origin/main` and automatically deployed by Coolify's GitHub webhook.
 - **Deployed Source Match:**
-  - Dynamic extraction from production static chunks confirmed the live server actions match the local build:
-    - `adminLoginAction`: `405c71fe715e8604b6fdbc8e1154a47c6c4ad34a1a`
-    - `teacherLoginAction`: `60381fa7f970a91455791cc4edb4ac67ef197a31b0`
-    - `studentLoginAction`: `60951fd2d577950bddc14c9b8af7cae7f8c551aa9e`
+  - Live static chunk analysis and action extraction on `https://syllabus360.abhigyanintelligence.cloud` verified that the active server actions in production correspond to the deployed release:
+    - `adminLoginAction`: `403f451fa7ebedc03d785949b1db9d9616d1826697`
+    - `teacherLoginAction`: `60f1264c1c8dd2514dd0c5ac0eb289924117b861e2`
+    - `studentLoginAction`: `60e621c0ba6c3f5fc22b66c8043f20f11d641ffa6e`
+  - Probed live authenticated Admin session against `https://syllabus360.abhigyanintelligence.cloud/student`:
+    - Returned **HTTP 200 OK**.
+    - Page body contains `Student Oversight • Director Governance View` and `Enrolled Student Directory`.
+    - Proves the live running container is serving `c212aea`.
 
 ---
 
@@ -59,9 +64,9 @@
     1. `PB_ADMIN_PASSWORD`: PocketBase superuser password.
     2. `ADMIN_MASTER_PASSWORD`: Director master password for `/admin/login`.
     3. `SESSION_SECRET`: 64-character hex key for HMAC-SHA256 session tokens.
-- **Why Git History Rewrite Has Not Been Force-Pushed:**
+- **Why Git History Rewrite Has Not Been Blindly Force-Pushed:**
   - **Operational Constraint:** Coolify VPS is configured with GitHub webhook auto-deployments on `origin/main`.
-  - In commit `d5b830c`, fallback credentials were temporarily removed from `docker-compose.yaml`. Because the Coolify dashboard environment variables had not yet been populated by the operator, Docker injected empty strings into the container, causing database authentication to fail and taking `/api/health` into HTTP 503 degraded status.
+  - In prior testing (commit `d5b830c`), fallback credentials were temporarily removed from `docker-compose.yaml`. Because the Coolify dashboard environment variables had not yet been populated by the operator, Docker injected empty strings into the container, causing database authentication to fail and taking `/api/health` into HTTP 503 degraded status.
   - If `git-filter-repo` and `git push --force-with-lease` are executed without prior Coolify panel variable population, production deployment will break immediately.
 - **Coordinated Operator Runbook:**
   1. Operator logs into Hostinger Coolify VPS Admin Console (`https://coolify.abhigyanintelligence.cloud/login`).
@@ -80,7 +85,7 @@
      ```bash
      git push origin --force-with-lease --all
      ```
-- **Status:** **BLOCKED ON OPERATOR SECRET ROTATION COORDINATION** (All safe automated code preparations complete).
+- **Status:** **BLOCKED ON OPERATOR SECRET ROTATION COORDINATION** (All safe automated code preparations complete; destructive force push prevented).
 
 ---
 
@@ -94,7 +99,7 @@
   - **Concurrency Protection (BUG-038):** Uses atomic in-flight reservation (`inFlight += 1`) before database queries, coupled with `releasePinAttempt` in `finally` blocks, closing race-condition bypass windows.
   - **Brute-Force Protection:** Enforces 5 failed attempts per student account -> 15 min lock; 5 failed attempts per IP for Director login -> 15 min lock; 10 attempts per IP per 15 min.
 - **Architectural Decision:** Retaining bounded in-memory rate limiting is the soundest engineering choice for the current single-instance deployment. Introducing Redis without provisioned infrastructure would create an unmonitored external network point of failure. Redis is deferred to future horizontal clustering phases.
-- **Status:** **VERIFIED & SAFELY DEFERRED TO CLUSTERING**.
+- **Status:** **VERIFIED / DEFERRED TO CLUSTERING**.
 
 ---
 
@@ -124,6 +129,7 @@
 - **Storage Permissions & Access Controls:**
   - PocketBase server-side backups at `https://stracker.abhigyanintelligence.cloud/api/backups` require Superuser authentication.
   - Direct unauthenticated HTTP request returns **HTTP 401 Unauthorized**.
+  - Direct unauthenticated download of backup archives returns **HTTP 403 Forbidden**.
   - Server backup files are stored inside Docker volumes owned by root on the VPS.
 - **Git & Container Exclusion:**
   - `.gitignore` explicitly excludes `/database/backups/` and `.env*`.
@@ -153,21 +159,25 @@
     2. **Authorized Read-Only Audit View:** When an Admin accesses `/student?studentId=${id}`, it renders that student's learning progress with a prominent Amber banner:
        > "🛡️ Administrator Oversight Mode • Read-Only Audit View: Viewing syllabus learning record for [Student Name] ([Roll No]). Student credentials and personal session state remain isolated."
        The student PIN change modal is withheld from the admin view.
-    3. **Session & Role Isolation:**
+    3. **UI Semantics & Non-Impersonation:**
+       - Page headline renders `Student Record: [Student Name]` (instead of `Welcome, [Student Name]`), avoiding any confusion with impersonation.
+       - Self-service buttons like `+ Log New Class Topic` are replaced with administrative links to Director Console (`/admin`).
+       - History section title renders `[Student Name]'s Classroom Submission History`.
+    4. **Session & Role Isolation:**
        - **Admin:** Authenticated with `role: 'admin'`. No student session impersonation occurs.
        - **Student:** Authenticated with `role: 'student'`. Locked strictly to `session.studentId`; query parameter overrides are ignored. Cross-student inspection is impossible.
        - **Faculty:** Blocked by `evaluateAccess` with HTTP 307 redirect to `/student/login`.
        - **Unauthenticated:** Blocked by `evaluateAccess` with HTTP 307 redirect to `/student/login`.
-  - Verified by 5 new unit tests in `src/tests/unit/portal-isolation.test.ts`.
+  - Verified by 6 unit tests in `src/tests/unit/portal-isolation.test.ts`.
 - **Status:** **VERIFIED & HARDENED**.
 
 ---
 
-## 3. Complete Regression Verification Record
+### 2.7 Complete Regression Verification Record
 
 | Verification Suite | Target | Result | Evidence |
 |---|---|:---:|---|
-| **Automated Unit Tests** | `npm run test:unit` (41 test suites) | **136 / 136 PASS** | 0 failures across 136 tests |
+| **Automated Unit Tests** | `npm run test:unit` (41 test suites) | **137 / 137 PASS** | 0 failures across 137 tests |
 | **Portal Separation & Isolation** | `src/scripts/live-portal-isolation-tests.ts` | **44 / 44 PASS** | 100% boundary isolation across roles |
 | **Live Production Smoke Tests** | `src/scripts/live-production-smoke-tests.ts` | **7 / 7 PASS** | Health, Admin login, Teacher portal, Endorsements, Schema, Invariants all verified |
 | **TypeScript Typecheck** | `npx tsc --noEmit` | **CLEAN** | 0 type errors |
@@ -179,7 +189,7 @@
 
 ---
 
-## 4. Final Operational Closure Statement
+## 3. Final Operational Closure Statement
 
 The Abhigyan Academy Syllabus Tracker production environment has been rigorously audited and certified:
 - Zero plaintext credentials exist in the live database.

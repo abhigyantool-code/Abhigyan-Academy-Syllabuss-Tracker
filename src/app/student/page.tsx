@@ -423,7 +423,7 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                Welcome, {student.name}
+                {isAdmin ? `Student Record: ${student.name}` : `Welcome, ${student.name}`}
               </h1>
               <p className="text-xs text-zinc-400 flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-zinc-300">Enrolled In:</span>
@@ -440,12 +440,22 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
-                href="/submit"
-                className="w-full sm:w-auto text-center bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
-              >
-                + Log New Class Topic
-              </Link>
+              {isAdmin ? (
+                <Link
+                  href="/admin"
+                  className="w-full sm:w-auto text-center bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold text-xs py-2.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  <span>Manage in Director Console</span>
+                </Link>
+              ) : (
+                <Link
+                  href="/submit"
+                  className="w-full sm:w-auto text-center bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
+                >
+                  + Log New Class Topic
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -503,10 +513,12 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
             <div>
               <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-400" />
-                <span>My Classroom Submission History</span>
+                <span>{isAdmin ? `${student.name}'s Classroom Submission History` : 'My Classroom Submission History'}</span>
               </h2>
               <p className="text-xs text-zinc-400">
-                Log of syllabus topics you have completed and submitted for faculty endorsement.
+                {isAdmin
+                  ? 'Audit log of syllabus topics completed and submitted by this student.'
+                  : 'Log of syllabus topics you have completed and submitted for faculty endorsement.'}
               </p>
             </div>
             <span className="text-xs font-mono text-zinc-500 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
@@ -519,17 +531,30 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
               <div className="w-12 h-12 rounded-2xl bg-zinc-800 text-zinc-500 flex items-center justify-center mx-auto">
                 <BookOpen className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-bold text-white">No Class Submissions Yet</h3>
+              <h3 className="text-sm font-bold text-white">
+                {isAdmin ? 'No Submissions Found for Student' : 'No Class Submissions Yet'}
+              </h3>
               <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                You haven&apos;t logged any classroom entries yet. Log today&apos;s class topic to begin building your verified syllabus tracking record.
+                {isAdmin
+                  ? 'This student has not yet recorded any classroom submissions.'
+                  : 'You haven\'t logged any classroom entries yet. Log today\'s class topic to begin building your verified syllabus tracking record.'}
               </p>
-              <Link
-                href="/submit"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl transition-all"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Submit First Entry</span>
-              </Link>
+              {isAdmin ? (
+                <Link
+                  href="/student"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl transition-all"
+                >
+                  &larr; Return to Student Directory
+                </Link>
+              ) : (
+                <Link
+                  href="/submit"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl transition-all"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Submit First Entry</span>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto -mx-5 sm:mx-0">
