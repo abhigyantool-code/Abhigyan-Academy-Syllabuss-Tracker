@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': `attachment; filename="entries_${isAllCourses ? 'all' : courseId}_${Date.now()}.csv"`,
       },
     });
-  } else if (type === 'progress') {
+  } else if (type === 'progress' || type === 'topics') {
     let allTopicProgress: any[] = [];
 
     if (isAllCourses) {
