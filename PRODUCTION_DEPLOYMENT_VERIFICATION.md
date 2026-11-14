@@ -5,7 +5,7 @@
 **Hosting Environment:** Hostinger Coolify VPS (Docker Standalone Runner)  
 **Node.js / Framework:** Node.js v20 / Next.js 16.4.3 (Turbopack) / React 19.3.0  
 **Backend Engine:** PocketBase v0.28.2 (Self-Hosted SQLite)  
-**Deployed Commit:** `a87fc42` / closure release (Predecessors: `321e6a8`, `38c48e8`, `7025246`, `c212aea`, `d6d03f9`, `231b9d4`)  
+**Deployed Commit:** `619fcd5` (Predecessors: `a87fc42`, `321e6a8`, `38c48e8`, `7025246`, `c212aea`, `d6d03f9`, `231b9d4`)  
 **Date of Verification:** 2026-11-14  
 **Verification Auditor:** Antigravity Integration & QA Reviewer  
 
