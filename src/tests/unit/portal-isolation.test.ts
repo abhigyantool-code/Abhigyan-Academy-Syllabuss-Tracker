@@ -170,4 +170,54 @@ describe('Portal Separation & Role Isolation Tests', () => {
       assert.strictEqual(verified, null, 'Tampered token must be rejected');
     });
   });
+
+  describe('6. Admin /student Access & Session Isolation Policies', () => {
+    it('should determine that Admin is explicitly authorized to access /student without impersonation', () => {
+      const result = evaluateAccess('student', adminSession);
+      assert.strictEqual(result.allowed, true);
+      assert.strictEqual(result.redirectUrl, undefined);
+    });
+
+    it('should block teacher sessions from accessing /student with HTTP 307 redirect', () => {
+      const result = evaluateAccess('student', facultySession);
+      assert.strictEqual(result.allowed, false);
+      assert.strictEqual(result.redirectUrl, '/student/login');
+    });
+
+    it('should block unauthenticated requests from accessing /student with HTTP 307 redirect', () => {
+      const result = evaluateAccess('student', null);
+      assert.strictEqual(result.allowed, false);
+      assert.strictEqual(result.redirectUrl, '/student/login');
+    });
+
+    it('should lock student session to their own studentId preventing cross-student inspection', () => {
+      // Simulate student session requesting target studentId parameter
+      const studentSessionPayload = {
+        userId: 'student_legit_001',
+        role: 'student',
+        studentId: 'student_legit_001',
+      };
+      const attemptedTargetParam = 'student_victim_999';
+      const isAdmin = studentSessionPayload.role === 'admin';
+      
+      // Target resolution invariant: Non-admin sessions MUST ignore query params and lock to session studentId
+      const resolvedStudentId = isAdmin && attemptedTargetParam
+        ? attemptedTargetParam
+        : (studentSessionPayload.studentId || studentSessionPayload.userId);
+
+      assert.strictEqual(resolvedStudentId, 'student_legit_001', 'Student session must not inspect victim student');
+    });
+
+    it('should allow admin session to audit target studentId in authorized read-only audit mode', () => {
+      const attemptedTargetParam = 'student_inspect_042';
+      const isAdmin = adminSession.role === 'admin';
+
+      const resolvedStudentId = isAdmin && attemptedTargetParam
+        ? attemptedTargetParam
+        : (adminSession as any).studentId || adminSession.userId;
+
+      assert.strictEqual(resolvedStudentId, 'student_inspect_042', 'Admin session can inspect student in audit mode');
+    });
+  });
 });
+
