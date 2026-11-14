@@ -485,11 +485,13 @@ export async function createTeacherAction(name: string, phone?: string | null) {
   await requireAccess('admin');
   const pb = await getPbClient();
 
+  const defaultPinHash = await hashPin('1234');
   const teacher = await pb.collection('teachers').create({
     name: name.trim(),
     phone: phone ? phone.trim() : null,
     active: true,
-    pin: '1234',
+    pin: '',
+    pin_hash: defaultPinHash,
   });
 
   await logAudit({
@@ -596,7 +598,7 @@ export async function createStudentAction(rollNo: string, name: string, courseId
     roll_no: rollNo.trim().toUpperCase(),
     name: name.trim(),
     active: true,
-    pin: '1234',
+    pin: '',
     pin_hash: defaultPinHash,
   });
 
@@ -733,7 +735,7 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
         roll_no: rollNo,
         name,
         active: true,
-        pin: '1234',
+        pin: '',
         pin_hash: defaultPinHash,
       });
       imported++;

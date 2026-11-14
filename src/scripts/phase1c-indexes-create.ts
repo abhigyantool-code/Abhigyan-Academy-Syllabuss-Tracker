@@ -105,12 +105,19 @@ export async function runIndexesCreate(): Promise<{ modified: string[]; snapshot
 
     console.log(`Applying ${indexes.length} indexes to '${colName}'...`);
     try {
-      // Merge unique indexes cleanly
-      const current = new Set(col.indexes || []);
-      for (const idx of indexes) {
-        current.add(idx);
+      // Merge indexes cleanly by index name to avoid duplicate index name collision
+      const indexMap = new Map<string, string>();
+      for (const existingIdx of (col.indexes || [])) {
+        const m = existingIdx.match(/INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"']?)([a-zA-Z0-9_]+)(?:[`"']?)/i);
+        if (m) indexMap.set(m[1].toLowerCase(), existingIdx);
       }
-      const newIndexes = Array.from(current);
+      for (const newIdx of indexes) {
+        const m = newIdx.match(/INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"']?)([a-zA-Z0-9_]+)(?:[`"']?)/i);
+        if (m && !indexMap.has(m[1].toLowerCase())) {
+          indexMap.set(m[1].toLowerCase(), newIdx);
+        }
+      }
+      const newIndexes = Array.from(indexMap.values());
 
       await pb.collections.update(col.id, { indexes: newIndexes });
 

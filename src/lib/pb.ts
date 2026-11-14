@@ -1,8 +1,17 @@
 import PocketBase from 'pocketbase';
 
+// Auto-load .env.local in script or dev environments if credentials are missing
+if (!process.env.PB_ADMIN_PASSWORD) {
+  try {
+    if (typeof (process as any).loadEnvFile === 'function') {
+      (process as any).loadEnvFile('.env.local');
+    }
+  } catch {}
+}
+
 const rawUrl = process.env.POCKETBASE_URL || 'https://stracker.abhigyanintelligence.cloud/_/';
 const PB_URL = rawUrl.replace(/\/_\/?$/, '').replace(/\/+$/, '');
-const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL || 'abhigyantool2@gmail.com';
+const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD;
 
 let pbInstance: PocketBase | null = null;

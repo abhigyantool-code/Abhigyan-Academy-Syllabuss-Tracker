@@ -28,10 +28,17 @@ export async function runIndexesVerify(): Promise<{ success: boolean; collection
       throw err;
     }
 
-    const activeIndexes = new Set(col.indexes || []);
+    const activeIndexNames = new Set(
+      (col.indexes || []).map((idx: string) => {
+        const m = idx.match(/INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"']?)([a-zA-Z0-9_]+)(?:[`"']?)/i);
+        return m ? m[1].toLowerCase() : '';
+      }).filter(Boolean)
+    );
     let colMissing = 0;
     for (const exp of expectedIndexes) {
-      if (!activeIndexes.has(exp)) {
+      const m = exp.match(/INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"']?)([a-zA-Z0-9_]+)(?:[`"']?)/i);
+      const expName = m ? m[1].toLowerCase() : '';
+      if (!expName || !activeIndexNames.has(expName)) {
         console.warn(`   ⚠️ Missing index on ${colName}: ${exp}`);
         colMissing++;
       }

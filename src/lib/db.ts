@@ -7,11 +7,17 @@ import { Pool } from 'pg';
 // Database connection pool for server-side PostgreSQL / Supabase
 const connectionString =
   process.env.DATABASE_URL ||
-  'postgres://postgres:postgres@localhost:5432/syllabus_tracker';
+  (process.env.NODE_ENV === 'production'
+    ? ''
+    : 'postgres://postgres:postgres@localhost:5432/syllabus_tracker');
 
 let pool: Pool | null = null;
 
 export function getDbPool(): Pool {
+  if (!connectionString) {
+    throw new Error('FATAL: DATABASE_URL is not configured in production environment variables.');
+  }
+
   if (!pool) {
     pool = new Pool({
       connectionString,

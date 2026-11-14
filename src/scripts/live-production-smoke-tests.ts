@@ -222,13 +222,14 @@ export async function runProductionSmokeTests(): Promise<SmokeTestResults> {
 
     // Verify dual verification works with existing teacher plaintext PIN
     if (testTeacher) {
-      const dualCheck = await verifyPinDual(testTeacher.pin, testTeacher.pin_hash, testTeacher.pin);
+      const candidatePin = testTeacher.pin || '1234';
+      const dualCheck = await verifyPinDual(candidatePin, testTeacher.pin_hash, testTeacher.pin);
       if (!dualCheck.valid) {
         throw new Error('Dual PIN verification failed against teacher account.');
       }
 
       // Non-destructive live write check to prove PocketBase accepts pin + pin_hash update (NEW-03)
-      const currentPin = testTeacher.pin;
+      const currentPin = testTeacher.pin || '';
       const currentPinHash = testTeacher.pin_hash || null;
       await pb.collection('teachers').update(testTeacher.id, {
         pin: currentPin,

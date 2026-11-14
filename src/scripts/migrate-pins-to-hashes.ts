@@ -111,6 +111,18 @@ export async function runPinMigration(options: {
       } else {
         console.log(`   ✓ "${colName}" schema already contains pin_hash field.`);
       }
+
+      if (purgePlaintext) {
+        const pinField = Array.isArray(fields) && fields.find((f: any) => f.name === 'pin');
+        if (pinField && pinField.required) {
+          console.log(`   + Setting pin field required: false in "${colName}" to allow plaintext purge...`);
+          if (isExecute) {
+            pinField.required = false;
+            await pb.collections.update(colName, { fields: fields });
+            console.log(`   ✓ "${colName}" pin field required set to false.`);
+          }
+        }
+      }
     } catch (schemaErr: any) {
       console.warn(`   ⚠️ Schema inspection note on "${colName}": ${schemaErr.message}`);
     }
@@ -123,6 +135,11 @@ export async function runPinMigration(options: {
     try {
       if (student.pin_hash && typeof student.pin_hash === 'string' && student.pin_hash.startsWith('scrypt$')) {
         stats.studentsAlreadyHashed++;
+        if (purgePlaintext && student.pin) {
+          if (isExecute) {
+            await pb.collection('students').update(student.id, { pin: '' });
+          }
+        }
         continue;
       }
 
@@ -158,6 +175,11 @@ export async function runPinMigration(options: {
     try {
       if (teacher.pin_hash && typeof teacher.pin_hash === 'string' && teacher.pin_hash.startsWith('scrypt$')) {
         stats.teachersAlreadyHashed++;
+        if (purgePlaintext && teacher.pin) {
+          if (isExecute) {
+            await pb.collection('teachers').update(teacher.id, { pin: '' });
+          }
+        }
         continue;
       }
 
