@@ -314,7 +314,7 @@ export async function getTeacherDashboardData(
     }),
     pb.collection('teaching_records').getList(1, 50, {
       filter: `teacher = "${teacherId}"`,
-      sort: '-created',
+      sort: '-session_date',
       expand: 'subject,topic,course',
     }).catch(() => ({ items: [] as any[] })),
   ]);

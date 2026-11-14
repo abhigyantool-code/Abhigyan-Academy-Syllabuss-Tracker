@@ -196,7 +196,7 @@ export async function getAdminInitialData() {
       sort: '-created',
     }),
     pb.collection('teaching_records').getList(1, 50, {
-      sort: '-created',
+      sort: '-session_date',
       expand: 'teacher,subject,topic,course',
     }).catch(() => ({ items: [] as any[] })),
   ]);
