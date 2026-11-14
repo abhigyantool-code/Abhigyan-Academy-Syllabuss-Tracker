@@ -38,6 +38,10 @@ export interface SubmitStudent {
 
 let cachedSubmitData: { data: any; expiry: number } | null = null;
 
+export function invalidateSubmitFormDataCache() {
+  cachedSubmitData = null;
+}
+
 export async function getSubmitFormData(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedSubmitData && cachedSubmitData.expiry > now) {
@@ -108,6 +112,6 @@ export async function getSubmitFormData(forceRefresh = false) {
     students: [] as SubmitStudent[],
   };
 
-  cachedSubmitData = { data: result, expiry: now + 60_000 };
+  cachedSubmitData = { data: result, expiry: now + 3_000 };
   return result;
 }

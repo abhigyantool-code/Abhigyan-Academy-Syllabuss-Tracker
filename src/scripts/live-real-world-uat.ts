@@ -21,9 +21,9 @@ if (fs.existsSync(envPath)) {
 }
 
 const PROD_URL = 'https://syllabus360.abhigyanintelligence.cloud';
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://stracker.abhigyanintelligence.cloud';
-const PB_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL!;
-const PB_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD!;
+const PB_URL = (process.env.POCKETBASE_URL || process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://stracker.abhigyanintelligence.cloud').replace(/\/_\/?$/, '').replace(/\/+$/, '');
+const PB_EMAIL = (process.env.PB_ADMIN_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL)!;
+const PB_PASSWORD = (process.env.PB_ADMIN_PASSWORD || process.env.POCKETBASE_ADMIN_PASSWORD)!;
 const ADMIN_MASTER_PASSWORD = process.env.ADMIN_MASTER_PASSWORD!;
 
 interface CheckResult {
@@ -69,7 +69,7 @@ async function main() {
   pb.autoCancellation(false);
   await pb.admins.authWithPassword(PB_EMAIL, PB_PASSWORD);
 
-  // Track synthetic IDs for guaranteed cleanup
+  // Track synthetic IDs and baseline IDs for guaranteed cleanup
   const createdStudentIds = new Set<string>();
   const createdTeacherIds = new Set<string>();
   const createdEnrollmentIds = new Set<string>();
@@ -77,9 +77,23 @@ async function main() {
   const createdEntryIds = new Set<string>();
   const createdTeachingRecordIds = new Set<string>();
   const createdClassCodeIds = new Set<string>();
-  const uatStartTimeIso = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
-  const browser = await chromium.launch({ headless: true });
+  const [baseAudits, baseCodes, baseTrs, baseEntries] = await Promise.all([
+    pb.collection('audit_log').getFullList({ fields: 'id' }).catch(() => []),
+    pb.collection('class_codes').getFullList({ fields: 'id' }).catch(() => []),
+    pb.collection('teaching_records').getFullList({ fields: 'id' }).catch(() => []),
+    pb.collection('entries').getFullList({ fields: 'id' }).catch(() => []),
+  ]);
+  const baselineAuditIds = new Set(baseAudits.map((r: any) => r.id));
+  const baselineClassCodeIds = new Set(baseCodes.map((r: any) => r.id));
+  const baselineTrIds = new Set(baseTrs.map((r: any) => r.id));
+  const baselineEntryIds = new Set(baseEntries.map((r: any) => r.id));
+
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : undefined,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
 
   try {
     // =========================================================================
@@ -104,8 +118,8 @@ async function main() {
         assert.equal(pbRes.status, 200, `PocketBase health returned ${pbRes.status}`);
         const feJson = await feRes.json();
         assert.equal(feJson.status, 'ok');
-        assert.equal(feJson.db, 'connected');
-        return `Frontend 200 OK (db=${feJson.db}, latency=${feJson.latencyMs}ms), PocketBase 200 OK`;
+        assert.equal(feJson.db, true);
+        return `Frontend 200 OK (db=${feJson.db}, timestamp=${feJson.timestamp}), PocketBase 200 OK`;
       }
     );
 
@@ -204,7 +218,7 @@ async function main() {
         await adminPage.click('button[type="submit"]');
         await adminPage.waitForURL(`${PROD_URL}/admin`, { timeout: 15000 });
         await adminPage.waitForSelector('text=Curriculum Builder', { timeout: 10000 });
-        const navText = await adminPage.locator('header').innerText();
+        const navText = (await adminPage.locator('header').textContent()) || '';
         assert.ok(navText.includes('Director Console'));
         assert.ok(navText.includes('Student Oversight'));
         return 'Logged into /admin Director Console; all 7 governance tabs rendered';
@@ -233,7 +247,7 @@ async function main() {
         // Wait for banner with Temporary PIN
         const banner = adminPage.locator('text=Temporary PIN:');
         await banner.waitFor({ timeout: 10000 });
-        const bannerText = await banner.innerText();
+        const bannerText = (await banner.textContent()) || '';
         const pinMatch = bannerText.match(/Temporary PIN:\s*(\d{6})/);
         assert.ok(pinMatch, `Expected 6-digit temporary PIN in banner, got: ${bannerText}`);
         testTeacherTempPin = pinMatch[1];
@@ -252,12 +266,23 @@ async function main() {
         await adminPage.click('button:has-text("Save Changes")');
         await adminPage.waitForSelector('text=Faculty member updated!', { timeout: 10000 });
 
-        // Assign NDA Subject to UAT Test Instructor Alpha via PB & verify
-        const ts = await pb.collection('teacher_subjects').create({
-          teacher: testTeacherId,
-          subject: ndaSubject.id,
+        // Assign NDA Subject to UAT Test Instructor Alpha via Admin UI modal
+        await teacherRow.locator('button[title="Assign Subjects"]').click();
+        const allocModal = adminPage.locator('div.fixed', { hasText: 'Assign Subjects to UAT Test Instructor Alpha' });
+        await allocModal.waitFor({ timeout: 5000 });
+        await allocModal
+          .locator('label')
+          .filter({ hasText: ndaSubject.name })
+          .filter({ hasText: ndaCourse.code })
+          .locator('input[type="checkbox"]')
+          .check();
+        await allocModal.locator('button:has-text("Save Allocations")').click();
+        await adminPage.waitForSelector('text=Subject allocations updated', { timeout: 10000 });
+
+        const tsList = await pb.collection('teacher_subjects').getFullList({
+          filter: `teacher = "${testTeacherId}"`,
         });
-        createdTeacherSubjectIds.add(ts.id);
+        for (const ts of tsList) createdTeacherSubjectIds.add(ts.id);
 
         // Also create synthetic Teacher 2 for cross-teacher isolation check
         const t2Pin = '648291';
@@ -294,12 +319,12 @@ async function main() {
         await adminPage.fill('input[placeholder*="Siddharth Joshi"]', 'UAT Test Cadet Alpha');
         // Check NDA course checkbox inside modal
         const modal = adminPage.locator('div.fixed', { hasText: 'Enroll New Student' });
-        await modal.locator('input[type="checkbox"]').first().check();
+        await modal.locator('label', { hasText: ndaCourse.name }).locator('input[type="checkbox"]').check();
         await modal.locator('button:has-text("Save Student")').click();
 
         const createBanner = adminPage.locator('text=Temporary PIN:');
         await createBanner.waitFor({ timeout: 10000 });
-        const createText = await createBanner.innerText();
+        const createText = (await createBanner.textContent()) || '';
         const createPinMatch = createText.match(/Temporary PIN:\s*(\d{6})/);
         assert.ok(createPinMatch, `Expected 6-digit temporary PIN on student creation: ${createText}`);
 
@@ -324,12 +349,13 @@ async function main() {
         // Now test Admin PIN Reset (Test #12 & Scenario C step 1)
         const studentRow = adminPage.locator('tr', { hasText: 'UAT-STU-901' });
         await studentRow.locator('button[title="Reset PIN"]').click();
-        await adminPage.waitForSelector('text=Reset PIN — UAT Test Cadet Alpha');
-        await adminPage.click('button:has-text("Reset PIN")');
+        const resetModal = adminPage.locator('div.fixed', { hasText: 'Reset PIN — UAT Test Cadet Alpha' });
+        await resetModal.waitFor({ timeout: 5000 });
+        await resetModal.locator('button:has-text("Reset PIN")').click();
 
         const resetBanner = adminPage.locator('text=reset successfully! Temporary PIN:');
         await resetBanner.waitFor({ timeout: 10000 });
-        const resetText = await resetBanner.innerText();
+        const resetText = (await resetBanner.textContent()) || '';
         const resetMatch = resetText.match(/Temporary PIN:\s*(\d{6})/);
         assert.ok(resetMatch, `Expected 6-digit temporary PIN on reset: ${resetText}`);
         testStudentTempPin = resetMatch[1];
@@ -356,15 +382,19 @@ async function main() {
 
         // Navigate to Class Codes & Board tab
         await adminPage.click('button:has-text("Class Codes & Board")');
-        await adminPage.waitForSelector('text=Daily Class Code Generator');
-        await adminPage.click('button:has-text("Generate Code")');
+        await adminPage.waitForSelector('text=Class Codes & Board Projection', { timeout: 10000 });
+        await adminPage.click('button:has-text("New Code")');
+        const genModal = adminPage.locator('div.fixed', { hasText: 'Generate Class Code' });
+        await genModal.waitFor({ timeout: 5000 });
+        await genModal.locator('select').selectOption({ value: ndaCourse.id });
+        await genModal.locator('button[type="submit"]:has-text("Generate Code")').click();
         await adminPage.waitForSelector('text=Active Now', { timeout: 10000 });
 
         // Track generated class code for cleanup
-        const recentCodes = await pb.collection('class_codes').getList(1, 5, {
-          filter: `created >= "${uatStartTimeIso}"`,
-        });
-        for (const c of recentCodes.items) createdClassCodeIds.add(c.id);
+        const allCodes = await pb.collection('class_codes').getFullList({ fields: 'id' });
+        for (const c of allCodes) {
+          if (!baselineClassCodeIds.has(c.id)) createdClassCodeIds.add(c.id);
+        }
 
         return 'Verified Edit Course Modal opens cleanly and newly generated same-day Class Code displays status "Active Now"';
       }
@@ -499,13 +529,14 @@ async function main() {
         // Check if class code input is visible
         const classCodeInput = studentPage.locator('input[placeholder*="NDA-942"]');
         if (await classCodeInput.isVisible()) {
-          const activeCode = await pb.collection('class_codes').getFirstListItem(`course = "${ndaCourse.id}"`, {
-            sort: '-created',
+          const allCodes = await pb.collection('class_codes').getFullList({
+            filter: `course = "${ndaCourse.id}"`,
           });
-          await classCodeInput.fill(activeCode.code);
+          const activeCode = allCodes[allCodes.length - 1];
+          if (activeCode) await classCodeInput.fill(activeCode.code);
         }
         await studentPage.click('button:has-text("Confirm Topic Covered")');
-        await studentPage.waitForSelector('text=Incorrect Student PIN', { timeout: 10000 });
+        await studentPage.waitForSelector('text=Incorrect 4-digit Student PIN', { timeout: 10000 });
 
         // Now enter valid personal PIN and submit
         await studentPage.fill('input[placeholder="Enter your PIN"]', studentPersonalPin);
@@ -1037,13 +1068,18 @@ async function main() {
       await pb.collection('teachers').delete(id).catch(() => {});
     }
 
-    // Clean up synthetic audit logs generated during the UAT window
-    const recentAudits = await pb
-      .collection('audit_log')
-      .getFullList({ filter: `created >= "${uatStartTimeIso}"` })
-      .catch(() => []);
-    for (const a of recentAudits) {
-      await pb.collection('audit_log').delete(a.id).catch(() => {});
+    // Clean up any synthetic class_codes or audit_log entries created during the UAT window
+    const allCodesNow = await pb.collection('class_codes').getFullList({ fields: 'id' }).catch(() => []);
+    for (const c of allCodesNow) {
+      if (!baselineClassCodeIds.has(c.id)) {
+        await pb.collection('class_codes').delete(c.id).catch(() => {});
+      }
+    }
+    const allAuditsNow = await pb.collection('audit_log').getFullList({ fields: 'id' }).catch(() => []);
+    for (const a of allAuditsNow) {
+      if (!baselineAuditIds.has(a.id)) {
+        await pb.collection('audit_log').delete(a.id).catch(() => {});
+      }
     }
 
     // Verify genuine production state after cleanup
