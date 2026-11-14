@@ -130,7 +130,7 @@ export async function getAdminInitialData() {
   });
 
   // 6. Active Class Codes
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
   const classCodes = await pb.collection('class_codes').getList(1, 30, {
     sort: '-created',
     expand: 'course',
@@ -138,7 +138,9 @@ export async function getAdminInitialData() {
 
   const classCodesData = classCodes.items.map((cc) => {
     const course = (cc.expand as any)?.course || courseMap.get(cc.course);
-    const isActive = cc.valid_from <= nowIso && cc.valid_until >= nowIso;
+    const fromMs = cc.valid_from ? new Date(cc.valid_from.replace(' ', 'T')).getTime() : 0;
+    const untilMs = cc.valid_until ? new Date(cc.valid_until.replace(' ', 'T')).getTime() : 0;
+    const isActive = fromMs <= nowMs && untilMs >= nowMs;
     return {
       id: cc.id,
       course_id: cc.course,
@@ -188,10 +190,16 @@ export async function getAdminInitialData() {
     };
   });
 
-  // 8. Audit Log
-  const auditLogs = await pb.collection('audit_log').getList(1, 50, {
-    sort: '-created',
-  });
+  // 8. Audit Log & Teaching Records
+  const [auditLogs, teachingRecordsRes] = await Promise.all([
+    pb.collection('audit_log').getList(1, 50, {
+      sort: '-created',
+    }),
+    pb.collection('teaching_records').getList(1, 50, {
+      sort: '-created',
+      expand: 'teacher,subject,topic,course',
+    }).catch(() => ({ items: [] as any[] })),
+  ]);
 
   const auditLogData = auditLogs.items.map((a) => ({
     id: a.id,
@@ -204,6 +212,29 @@ export async function getAdminInitialData() {
     created_at: a.created,
   }));
 
+  const teachingRecordsData = teachingRecordsRes.items.map((tr) => {
+    const teacher = (tr.expand as any)?.teacher;
+    const subject = (tr.expand as any)?.subject;
+    const topic = (tr.expand as any)?.topic;
+    const course = (tr.expand as any)?.course;
+    return {
+      id: tr.id,
+      session_date: tr.session_date ? tr.session_date.split(' ')[0] : '',
+      status: tr.status || 'completed',
+      remarks: tr.remarks || null,
+      is_voided: Boolean(tr.is_voided),
+      voided_by: tr.voided_by || null,
+      void_reason: tr.void_reason || null,
+      created_at: tr.created,
+      teacher_id: tr.teacher,
+      teacher_name: teacher?.name || 'Unknown Faculty',
+      subject_name: subject?.name || 'Unknown Subject',
+      topic_name: topic?.name || 'Unknown Topic',
+      topic_seq: topic?.seq_no || 0,
+      course_code: course?.code || '',
+    };
+  });
+
   return {
     today,
     courses: coursesData,
@@ -214,5 +245,6 @@ export async function getAdminInitialData() {
     classCodes: classCodesData,
     reviewQueue: reviewQueueData,
     auditLog: auditLogData,
+    teachingRecords: teachingRecordsData,
   };
 }

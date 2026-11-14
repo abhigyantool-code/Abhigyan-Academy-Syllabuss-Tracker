@@ -6,7 +6,7 @@ import { logAudit } from '@/lib/audit';
 import { getTodayIST, getTodayBoundsIST } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
 import { parseCsv } from '@/lib/csv-parser';
-import { hashPin, generateTemporaryPin } from '@/lib/pin-hash';
+import { hashPin, generateTemporaryPin, markHashAsTemporary } from '@/lib/pin-hash';
 import { validateNewPinStrength } from '@/lib/rate-limit';
 
 // -------------------------------------------------------------
@@ -496,7 +496,7 @@ export async function createTeacherAction(name: string, phone?: string | null, c
     pinToUse = generateTemporaryPin();
   }
 
-  const pinHash = await hashPin(pinToUse);
+  const pinHash = markHashAsTemporary(await hashPin(pinToUse));
   const teacher = await pb.collection('teachers').create({
     name: name.trim(),
     phone: phone ? phone.trim() : null,
@@ -614,7 +614,7 @@ export async function createStudentAction(rollNo: string, name: string, courseId
     pinToUse = generateTemporaryPin();
   }
 
-  const pinHash = await hashPin(pinToUse);
+  const pinHash = markHashAsTemporary(await hashPin(pinToUse));
   const student = await pb.collection('students').create({
     roll_no: rollNo.trim().toUpperCase(),
     name: name.trim(),
@@ -759,7 +759,7 @@ export async function bulkImportStudentsCsvAction(csvContent: string, defaultCou
       } else {
         pinToUse = generateTemporaryPin();
       }
-      const pinHash = await hashPin(pinToUse);
+      const pinHash = markHashAsTemporary(await hashPin(pinToUse));
 
       const student = await pb.collection('students').create({
         roll_no: rollNo,
@@ -898,7 +898,7 @@ export async function resetStudentPinAction(studentId: string, newPin?: string) 
   const before = await pb.collection('students').getOne(studentId).catch(() => null);
   if (!before) throw new Error('Student not found.');
 
-  const pinHash = await hashPin(pinToUse);
+  const pinHash = markHashAsTemporary(await hashPin(pinToUse));
   await pb.collection('students').update(studentId, {
     pin: '',
     pin_hash: pinHash,
@@ -933,7 +933,7 @@ export async function resetTeacherPinAction(teacherId: string, newPin?: string) 
   const before = await pb.collection('teachers').getOne(teacherId).catch(() => null);
   if (!before) throw new Error('Teacher not found.');
 
-  const pinHash = await hashPin(pinToUse);
+  const pinHash = markHashAsTemporary(await hashPin(pinToUse));
   await pb.collection('teachers').update(teacherId, {
     pin: '',
     pin_hash: pinHash,

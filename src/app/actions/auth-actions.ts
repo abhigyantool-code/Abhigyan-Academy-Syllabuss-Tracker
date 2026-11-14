@@ -94,13 +94,13 @@ export async function teacherLoginAction(
     }
 
     // Create session
-    const isDefaultPin = pin.trim() === '1234';
+    const mustRotatePin = pin.trim() === '1234' || Boolean(verification.isTemporary);
     await createSession({
       userId: teacher.id,
       role: 'faculty',
       name: teacher.name,
       teacherId: teacher.id,
-      mustChangePin: isDefaultPin,
+      mustChangePin: mustRotatePin,
     });
 
     await logAudit({
@@ -111,7 +111,7 @@ export async function teacherLoginAction(
     });
 
     revalidatePath('/teacher');
-    return { success: true, mustChangePin: isDefaultPin };
+    return { success: true, mustChangePin: mustRotatePin };
   } catch (err: any) {
     if (inFlightReserved) {
       releasePinAttempt(resolvedTeacherId, clientIp);
@@ -600,13 +600,13 @@ export async function studentLoginAction(
     }
 
     // Create student session
-    const isDefaultPin = pin.trim() === '1234';
+    const mustRotatePin = pin.trim() === '1234' || Boolean(verification.isTemporary);
     await createSession({
       userId: student.id,
       role: 'student',
       name: student.name,
       studentId: student.id,
-      mustChangePin: isDefaultPin,
+      mustChangePin: mustRotatePin,
     });
 
     await logAudit({
@@ -615,7 +615,7 @@ export async function studentLoginAction(
       entityId: student.id,
     });
 
-    return { success: true, mustChangePin: isDefaultPin };
+    return { success: true, mustChangePin: mustRotatePin };
   } catch (err: any) {
     if (inFlightReserved && resolvedStudentId) {
       releasePinAttempt(resolvedStudentId, clientIp);

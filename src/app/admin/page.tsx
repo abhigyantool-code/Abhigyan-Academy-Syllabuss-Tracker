@@ -42,6 +42,15 @@ export default async function AdminPage() {
             </div>
 
             <Link
+              href="/student"
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+              title="Student Oversight & Audit Directory"
+            >
+              <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Student Oversight</span>
+            </Link>
+
+            <Link
               href="/submit"
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
             >
@@ -85,7 +94,7 @@ export default async function AdminPage() {
       </main>
 
       <footer className="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-        Abhigyan Academy Syllabus Tracker &bull; Admin Console (Phase 1: Open Mode) &bull; Changes automatically audit-logged
+        Abhigyan Academy Syllabus Tracker &bull; Director Governance Console &bull; Changes automatically audit-logged
       </footer>
     </div>
   );

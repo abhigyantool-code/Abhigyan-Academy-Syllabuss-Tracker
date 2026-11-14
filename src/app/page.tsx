@@ -56,51 +56,67 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* 3 Core Portals Cards */}
+        {/* Core Portals Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {/* Submit */}
-          <Link
-            href="/submit"
-            className="group relative flex flex-col justify-between p-6 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900 transition-all shadow-xl hover:shadow-emerald-500/10"
-          >
+          {/* Student Portal */}
+          <div className="group relative flex flex-col justify-between p-6 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-900 transition-all shadow-xl hover:shadow-emerald-500/10">
             <div>
               <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <GraduationCap className="w-6 h-6" />
               </div>
               <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                Student Entry
-                <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">/submit</span>
+                Student Portal
+                <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">/student</span>
               </h2>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Mobile-first form for students to log daily covered topics, anti-misuse verification, and class codes.
+                Log daily covered topics, inspect your personal syllabus curriculum, and view verified classroom submission history.
               </p>
             </div>
-            <div className="mt-6 flex items-center text-xs font-semibold text-emerald-400 group-hover:translate-x-1 transition-transform">
-              Open Student Portal &rarr;
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-xs font-semibold">
+              <Link
+                href="/submit"
+                className="text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Log Class (/submit) &rarr;
+              </Link>
+              <Link
+                href="/student"
+                className="text-slate-300 hover:text-white bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                My Dashboard (/student)
+              </Link>
             </div>
-          </Link>
+          </div>
 
-          {/* Dashboard */}
-          <Link
-            href="/dashboard"
-            className="group relative flex flex-col justify-between p-6 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-sky-500/50 hover:bg-slate-900 transition-all shadow-xl hover:shadow-sky-500/10"
-          >
+          {/* Faculty Workspace & Dashboard */}
+          <div className="group relative flex flex-col justify-between p-6 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-sky-500/50 hover:bg-slate-900 transition-all shadow-xl hover:shadow-sky-500/10">
             <div>
               <div className="w-12 h-12 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <LayoutDashboard className="w-6 h-6" />
               </div>
               <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                Faculty Dashboard
-                <span className="text-xs bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded font-mono">/dashboard</span>
+                Faculty Portal
+                <span className="text-xs bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded font-mono">/teacher</span>
               </h2>
               <p className="text-sm text-slate-400 leading-relaxed">
-                Real-time syllabus coverage, planned vs actual variance curves, teacher scorecards, and progress exports.
+                Mark lecture topics taught, review student confirmations, and view real-time syllabus coverage &amp; variance curves.
               </p>
             </div>
-            <div className="mt-6 flex items-center text-xs font-semibold text-sky-400 group-hover:translate-x-1 transition-transform">
-              Open Faculty Dashboard &rarr;
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-xs font-semibold">
+              <Link
+                href="/teacher"
+                className="text-sky-400 hover:text-sky-300 bg-sky-500/10 border border-sky-500/20 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Faculty Workspace (/teacher) &rarr;
+              </Link>
+              <Link
+                href="/dashboard"
+                className="text-slate-300 hover:text-white bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Analytics (/dashboard)
+              </Link>
             </div>
-          </Link>
+          </div>
 
           {/* Admin */}
           <Link

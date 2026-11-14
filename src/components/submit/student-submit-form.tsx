@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   SubmitCourseData,
   SubmitTeacher,
@@ -38,18 +39,35 @@ interface StudentSubmitFormProps {
     topics: SubmitTopic[];
     students: SubmitStudent[];
   };
+  defaultStudentSession?: {
+    id: string;
+    name: string;
+    rollNo: string;
+    courseId?: string;
+  } | null;
 }
 
-export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
+export function StudentSubmitForm({ initialData, defaultStudentSession = null }: StudentSubmitFormProps) {
   const { courses, teachers, subjects, topics, students } = initialData;
 
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
+  const initialCourseId =
+    (defaultStudentSession?.courseId &&
+      courses.some((c) => c.id === defaultStudentSession.courseId) &&
+      defaultStudentSession.courseId) ||
+    courses[0]?.id ||
+    '';
+
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [studentRollNo, setStudentRollNo] = useState<string>('');
-  const [verifiedStudent, setVerifiedStudent] = useState<{ id: string; name: string; roll_no: string } | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(defaultStudentSession?.id || '');
+  const [studentRollNo, setStudentRollNo] = useState<string>(defaultStudentSession?.rollNo || '');
+  const [verifiedStudent, setVerifiedStudent] = useState<{ id: string; name: string; roll_no: string } | null>(
+    defaultStudentSession
+      ? { id: defaultStudentSession.id, name: defaultStudentSession.name, roll_no: defaultStudentSession.rollNo }
+      : null
+  );
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [studentPin, setStudentPin] = useState<string>('');
@@ -370,19 +388,29 @@ export function StudentSubmitForm({ initialData }: StudentSubmitFormProps) {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            setSuccessData(null);
-            setSelectedTopicId('');
-            setRemarks('');
-            setClassCode('');
-            setStudentPin('');
-          }}
-          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm py-3 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 active:scale-98"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Log Another Class</span>
-        </button>
+        <div className="space-y-2.5">
+          <button
+            onClick={() => {
+              setSuccessData(null);
+              setSelectedTopicId('');
+              setRemarks('');
+              setClassCode('');
+              setStudentPin('');
+            }}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm py-3 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 active:scale-98"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Log Another Class</span>
+          </button>
+
+          <Link
+            href="/student"
+            className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold text-xs py-2.5 px-4 rounded-2xl transition-all"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+            <span>View My Student Dashboard</span>
+          </Link>
+        </div>
       </div>
     );
   }

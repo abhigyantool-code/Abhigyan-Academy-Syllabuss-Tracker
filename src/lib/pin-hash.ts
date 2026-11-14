@@ -41,6 +41,29 @@ export function hashPinSync(pin: string): string {
 }
 
 /**
+ * Marks a scrypt PIN hash as a temporary credential requiring rotation on next login.
+ * Format: scrypt$<salt_hex>$<derived_key_hex>$temp
+ */
+export function markHashAsTemporary(storedHash: string): string {
+  if (!storedHash || typeof storedHash !== 'string' || !storedHash.startsWith('scrypt$')) {
+    return storedHash;
+  }
+  return storedHash.endsWith('$temp') ? storedHash : `${storedHash}$temp`;
+}
+
+/**
+ * Checks whether a stored scrypt hash is flagged as a temporary PIN.
+ */
+export function isTemporaryPinHash(storedHash?: string | null): boolean {
+  return Boolean(
+    storedHash &&
+      typeof storedHash === 'string' &&
+      storedHash.startsWith('scrypt$') &&
+      storedHash.endsWith('$temp')
+  );
+}
+
+/**
  * Verifies a candidate PIN against a stored scrypt hash in constant time.
  */
 export async function verifyPinHash(pin: string, storedHash: string): Promise<boolean> {
@@ -49,7 +72,9 @@ export async function verifyPinHash(pin: string, storedHash: string): Promise<bo
   }
 
   const parts = storedHash.split('$');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') {
+  const isValidFormat =
+    parts[0] === 'scrypt' && (parts.length === 3 || (parts.length === 4 && parts[3] === 'temp'));
+  if (!isValidFormat) {
     return false;
   }
 
@@ -85,7 +110,9 @@ export function verifyPinHashSync(pin: string, storedHash: string): boolean {
   }
 
   const parts = storedHash.split('$');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') {
+  const isValidFormat =
+    parts[0] === 'scrypt' && (parts.length === 3 || (parts.length === 4 && parts[3] === 'temp'));
+  if (!isValidFormat) {
     return false;
   }
 
@@ -110,15 +137,15 @@ export function verifyPinHashSync(pin: string, storedHash: string): boolean {
  * Dual verification:
  * 1. If storedHash is present, verifies using scrypt constant-time check.
  * 2. If storedHash is absent/null, falls back to storedPlaintext using timing-safe safeCompare.
- * 3. Returns { valid: boolean, needsMigration: boolean } so callers can auto-upgrade credentials.
+ * 3. Returns { valid: boolean, needsMigration: boolean, isTemporary: boolean } so callers can auto-upgrade credentials and enforce temporary PIN rotation.
  */
 export async function verifyPinDual(
   pin: string,
   storedHash?: string | null,
   storedPlaintext?: string | null
-): Promise<{ valid: boolean; needsMigration: boolean }> {
+): Promise<{ valid: boolean; needsMigration: boolean; isTemporary?: boolean }> {
   if (!pin || typeof pin !== 'string') {
-    return { valid: false, needsMigration: false };
+    return { valid: false, needsMigration: false, isTemporary: false };
   }
 
   const trimmedPin = pin.trim();
@@ -126,16 +153,20 @@ export async function verifyPinDual(
   // If hash is available, verify against hash
   if (storedHash && typeof storedHash === 'string' && storedHash.startsWith('scrypt$')) {
     const matches = await verifyPinHash(trimmedPin, storedHash);
-    return { valid: matches, needsMigration: false };
+    return {
+      valid: matches,
+      needsMigration: false,
+      isTemporary: matches && isTemporaryPinHash(storedHash),
+    };
   }
 
   // Fallback to plaintext PIN with constant-time comparison
   if (storedPlaintext && typeof storedPlaintext === 'string') {
     const matches = safeCompare(trimmedPin, storedPlaintext.trim());
-    return { valid: matches, needsMigration: matches };
+    return { valid: matches, needsMigration: matches, isTemporary: false };
   }
 
-  return { valid: false, needsMigration: false };
+  return { valid: false, needsMigration: false, isTemporary: false };
 }
 
 /**

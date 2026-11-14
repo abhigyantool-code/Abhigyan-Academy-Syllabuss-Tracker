@@ -307,6 +307,62 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
     .map((e) => (e.expand as any)?.course?.name)
     .filter(Boolean);
 
+  const enrolledCourseIds = enrollments.map((e) => e.course).filter(Boolean);
+  let assignedSubjectsWithTopics: Array<{
+    id: string;
+    name: string;
+    courseCode: string;
+    courseName: string;
+    topics: Array<{ id: string; seq_no: number; name: string; loggedByStudent: boolean }>;
+  }> = [];
+
+  if (enrolledCourseIds.length > 0) {
+    const courseFilter = enrolledCourseIds.map((cId) => `course = "${cId}"`).join(' || ');
+    const subjectsList = await pb
+      .collection('subjects')
+      .getFullList({
+        filter: courseFilter,
+        sort: 'sort_order',
+        expand: 'course',
+      })
+      .catch(() => [] as any[]);
+
+    if (subjectsList.length > 0) {
+      const subFilter = subjectsList.map((s) => `subject = "${s.id}"`).join(' || ');
+      const topicsList = await pb
+        .collection('topics')
+        .getFullList({
+          filter: subFilter,
+          sort: 'seq_no',
+        })
+        .catch(() => [] as any[]);
+
+      const studentLoggedTopicIds = new Set(entries.map((e) => e.topic));
+      const topicsBySub = new Map<string, any[]>();
+      for (const t of topicsList) {
+        if (!topicsBySub.has(t.subject)) topicsBySub.set(t.subject, []);
+        topicsBySub.get(t.subject)!.push(t);
+      }
+
+      assignedSubjectsWithTopics = subjectsList.map((s) => {
+        const courseObj = (s.expand as any)?.course;
+        const subTopics = topicsBySub.get(s.id) || [];
+        return {
+          id: s.id,
+          name: s.name,
+          courseCode: courseObj?.code || '',
+          courseName: courseObj?.name || '',
+          topics: subTopics.map((t) => ({
+            id: t.id,
+            seq_no: t.seq_no,
+            name: t.name,
+            loggedByStudent: studentLoggedTopicIds.has(t.id),
+          })),
+        };
+      });
+    }
+  }
+
   const totalLogged = entries.length;
   const approvedEntries = entries.filter(
     (e) => e.status === 'covered' && (e.review_status === 'auto' || e.review_status === 'approved' || e.review_status === 'CLEARED')
@@ -650,6 +706,73 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
             </div>
           )}
         </div>
+
+        {/* Assigned Subjects & Syllabus Curriculum */}
+        {assignedSubjectsWithTopics.length > 0 && (
+          <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-emerald-400" />
+                  <span>Assigned Subjects &amp; Syllabus Topics</span>
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  Curriculum subjects and class topics assigned to your enrolled batch ({enrolledCourseNames.join(', ')}).
+                </p>
+              </div>
+              <span className="text-xs font-mono text-zinc-500 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                {assignedSubjectsWithTopics.length} Subjects
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {assignedSubjectsWithTopics.map((sub) => {
+                const loggedCount = sub.topics.filter((t) => t.loggedByStudent).length;
+                return (
+                  <div
+                    key={sub.id}
+                    className="bg-zinc-950/70 border border-zinc-800/80 rounded-2xl p-4 space-y-3"
+                  >
+                    <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold">
+                          {sub.courseCode}
+                        </span>
+                        <h3 className="text-sm font-bold text-white mt-1">{sub.name}</h3>
+                      </div>
+                      <span className="text-xs font-mono text-zinc-400">
+                        {loggedCount}/{sub.topics.length} Logged
+                      </span>
+                    </div>
+
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                      {sub.topics.map((top) => (
+                        <div
+                          key={top.id}
+                          className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/50"
+                        >
+                          <span className="text-zinc-300 truncate pr-2">
+                            <strong className="font-mono text-zinc-500 mr-1.5">#{top.seq_no}</strong>
+                            {top.name}
+                          </span>
+                          {top.loggedByStudent ? (
+                            <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                              Submitted
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-mono text-zinc-500 shrink-0">
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}

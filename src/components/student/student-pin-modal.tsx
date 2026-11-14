@@ -13,14 +13,14 @@ interface StudentPinModalProps {
 export function StudentPinModal({ rollNo, mustChangePin = false }: StudentPinModalProps) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(mustChangePin);
-  const [currentPin, setCurrentPin] = useState(mustChangePin ? '1234' : '');
+  const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(
     mustChangePin
       ? {
-          text: '⚠️ Mandatory Credential Rotation: Your account is currently using the default PIN (1234). Please set a secure personal PIN to continue.',
+          text: '⚠️ Mandatory Credential Rotation: Your account is currently using a temporary or default PIN. Please enter your current PIN and set a secure personal PIN to continue.',
           type: 'error',
         }
       : null

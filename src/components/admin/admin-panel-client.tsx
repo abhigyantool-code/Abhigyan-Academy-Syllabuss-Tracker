@@ -49,6 +49,7 @@ export function AdminPanelClient({ initialData }: AdminPanelClientProps) {
     classCodes,
     reviewQueue,
     auditLog,
+    teachingRecords = [],
   } = initialData;
 
   const navTabs: AdminNavTab[] = [
@@ -109,7 +110,9 @@ export function AdminPanelClient({ initialData }: AdminPanelClientProps) {
           <CurriculumManager courses={courses} subjects={subjects} topics={topics} />
         )}
         {activeTab === 'courses' && <CoursesManager courses={courses} />}
-        {activeTab === 'faculty' && <FacultyManager teachers={teachers} subjects={subjects} />}
+        {activeTab === 'faculty' && (
+          <FacultyManager teachers={teachers} subjects={subjects} teachingRecords={teachingRecords} />
+        )}
         {activeTab === 'students' && <StudentsManager students={students} courses={courses} />}
         {activeTab === 'codes' && (
           <ClassCodesManager codes={classCodes} courses={courses} todayIST={today} />

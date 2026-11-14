@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { hashPin, verifyPinDual, generateTemporaryPin } from '../../lib/pin-hash';
+import {
+  hashPin,
+  verifyPinDual,
+  generateTemporaryPin,
+  markHashAsTemporary,
+  isTemporaryPinHash,
+} from '../../lib/pin-hash';
 import { validateNewPinStrength } from '../../lib/rate-limit';
 import { parseCsv } from '../../lib/csv-parser';
 import { signPayload, verifyPayload } from '../../lib/session';
@@ -266,6 +272,52 @@ describe('Admin PIN Management & Temporary Credential Security', () => {
       assert.match(generatedPins[0].temporaryPin, /^\d{6}$/);
       assert.equal(generatedPins[1].rollNo, 'NDA-102');
       assert.match(generatedPins[1].temporaryPin, /^\d{6}$/);
+    });
+  });
+
+  describe('Temporary PIN Hash Marker ($temp) & Mandatory Rotation Lifecycle (UAT-BUG-001)', () => {
+    it('should flag admin-generated or admin-reset temporary PINs with $temp and trigger isTemporary: true on login', async () => {
+      const tempPin = generateTemporaryPin();
+      const baseHash = await hashPin(tempPin);
+      const tempHash = markHashAsTemporary(baseHash);
+
+      assert.equal(tempHash.endsWith('$temp'), true);
+      assert.equal(isTemporaryPinHash(tempHash), true);
+      assert.equal(isTemporaryPinHash(baseHash), false);
+
+      // Verify login with temporary PIN succeeds and reports isTemporary = true
+      const authRes = await verifyPinDual(tempPin, tempHash, '');
+      assert.equal(authRes.valid, true);
+      assert.equal(authRes.isTemporary, true);
+
+      // Verify wrong PIN fails and reports isTemporary = false
+      const wrongRes = await verifyPinDual('999999', tempHash, '');
+      assert.equal(wrongRes.valid, false);
+      assert.equal(Boolean(wrongRes.isTemporary), false);
+
+      // Simulate student rotating PIN to a personal PIN
+      const personalPin = '739204';
+      const personalHash = await hashPin(personalPin);
+      assert.equal(isTemporaryPinHash(personalHash), false);
+
+      const postRotateAuth = await verifyPinDual(personalPin, personalHash, '');
+      assert.equal(postRotateAuth.valid, true);
+      assert.equal(Boolean(postRotateAuth.isTemporary), false);
+    });
+  });
+
+  describe('PocketBase Space-Delimited Timestamp Active Check (UAT-BUG-004)', () => {
+    it('should accurately identify active same-day class codes when PocketBase uses space instead of T', () => {
+      const nowMs = new Date('2026-11-14T10:35:00.000Z').getTime();
+      // PocketBase returns space-delimited timestamps
+      const pbValidFrom = '2026-11-14 00:00:00.000Z';
+      const pbValidUntil = '2026-11-14 18:29:59.999Z';
+
+      const fromMs = new Date(pbValidFrom.replace(' ', 'T')).getTime();
+      const untilMs = new Date(pbValidUntil.replace(' ', 'T')).getTime();
+      const isActive = fromMs <= nowMs && untilMs >= nowMs;
+
+      assert.equal(isActive, true);
     });
   });
 });

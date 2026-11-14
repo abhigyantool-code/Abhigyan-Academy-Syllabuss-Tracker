@@ -11,6 +11,7 @@ export interface TeacherAssignedSubject {
   total_topics: number;
   covered_topics: number;
   progress_pct: number;
+  enrolled_students?: number;
 }
 
 export interface TeacherRecentEntry {
@@ -21,6 +22,21 @@ export interface TeacherRecentEntry {
   created_at: string;
   student_name: string;
   student_roll: string;
+  subject_name: string;
+  topic_id: string;
+  topic_name: string;
+  topic_seq: number;
+  course_code: string;
+}
+
+export interface TeacherTeachingRecordItem {
+  id: string;
+  session_date: string;
+  status: string;
+  remarks: string | null;
+  is_voided: boolean;
+  void_reason: string | null;
+  created_at: string;
   subject_name: string;
   topic_id: string;
   topic_name: string;
@@ -51,6 +67,7 @@ export interface TeacherDashboardData {
   selectedCourseId: string;
   topics: TeacherTopicItem[];
   recentStudentLogs: TeacherRecentEntry[];
+  teachingRecords?: TeacherTeachingRecordItem[];
   today: string;
 }
 
@@ -83,6 +100,7 @@ export async function getTeacherDashboardData(
       selectedCourseId: '',
       topics: [],
       recentStudentLogs: [],
+      teachingRecords: [],
       today,
     };
   }
@@ -209,6 +227,7 @@ export async function getTeacherDashboardData(
       total_topics: total,
       covered_topics: coveredCount,
       progress_pct: pct,
+      enrolled_students: enrolled,
     });
   }
 
@@ -286,12 +305,19 @@ export async function getTeacherDashboardData(
     });
   }
 
-  // 4. Fetch recent student logs for this teacher
-  const logsRes = await pb.collection('entries').getList(1, 40, {
-    filter: `teacher = "${teacherId}"`,
-    sort: '-created',
-    expand: 'student,subject,topic,course',
-  });
+  // 4. Fetch recent student logs and teacher's own teaching records
+  const [logsRes, teacherTeachingRecsRes] = await Promise.all([
+    pb.collection('entries').getList(1, 40, {
+      filter: `teacher = "${teacherId}"`,
+      sort: '-created',
+      expand: 'student,subject,topic,course',
+    }),
+    pb.collection('teaching_records').getList(1, 50, {
+      filter: `teacher = "${teacherId}"`,
+      sort: '-created',
+      expand: 'subject,topic,course',
+    }).catch(() => ({ items: [] as any[] })),
+  ]);
 
   const recentStudentLogs: TeacherRecentEntry[] = logsRes.items.map((r) => {
     const student = (r.expand as any)?.student;
@@ -315,6 +341,27 @@ export async function getTeacherDashboardData(
     };
   });
 
+  const teachingRecords: TeacherTeachingRecordItem[] = teacherTeachingRecsRes.items.map((tr) => {
+    const subject = (tr.expand as any)?.subject;
+    const topic = (tr.expand as any)?.topic;
+    const course = (tr.expand as any)?.course;
+
+    return {
+      id: tr.id,
+      session_date: tr.session_date ? tr.session_date.split(' ')[0] : '',
+      status: tr.status || 'completed',
+      remarks: tr.remarks || null,
+      is_voided: Boolean(tr.is_voided),
+      void_reason: tr.void_reason || null,
+      created_at: tr.created,
+      subject_name: subject?.name || '',
+      topic_id: topic?.id || tr.topic,
+      topic_name: topic?.name || '',
+      topic_seq: topic?.seq_no || 0,
+      course_code: course?.code || '',
+    };
+  });
+
   return {
     teacher: {
       id: teacher.id,
@@ -326,6 +373,7 @@ export async function getTeacherDashboardData(
     selectedCourseId,
     topics,
     recentStudentLogs,
+    teachingRecords,
     today,
   };
 }

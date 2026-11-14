@@ -6,8 +6,9 @@ import {
   updateTeacherAction,
   assignTeacherSubjectsAction,
   resetTeacherPinAction,
+  voidTeachingRecordAction,
 } from '@/app/actions/admin-actions';
-import { Plus, Edit2, BookOpen, KeyRound } from 'lucide-react';
+import { Plus, Edit2, BookOpen, KeyRound, RotateCcw, CheckCircle2 } from 'lucide-react';
 
 interface TeacherItem {
   id: string;
@@ -26,12 +27,29 @@ interface SubjectItem {
   name: string;
 }
 
+interface TeachingRecordAdminItem {
+  id: string;
+  session_date: string;
+  status: string;
+  remarks: string | null;
+  is_voided: boolean;
+  voided_by: string | null;
+  void_reason: string | null;
+  teacher_id: string;
+  teacher_name: string;
+  subject_name: string;
+  topic_name: string;
+  topic_seq: number;
+  course_code: string;
+}
+
 interface FacultyManagerProps {
   teachers: TeacherItem[];
   subjects: SubjectItem[];
+  teachingRecords?: TeachingRecordAdminItem[];
 }
 
-export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
+export function FacultyManager({ teachers, subjects, teachingRecords = [] }: FacultyManagerProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<TeacherItem | null>(null);
   const [allocatingTeacher, setAllocatingTeacher] = useState<TeacherItem | null>(null);
@@ -42,6 +60,11 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
   const [pinResetTeacher, setPinResetTeacher] = useState<TeacherItem | null>(null);
   const [newPin, setNewPin] = useState('');
   const [pinBusy, setPinBusy] = useState(false);
+
+  // Void teaching record state
+  const [voidTarget, setVoidTarget] = useState<TeachingRecordAdminItem | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidBusy, setVoidBusy] = useState(false);
 
   // New form
   const [name, setName] = useState('');
@@ -126,6 +149,29 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
     }
   };
 
+  const handleVoidRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voidTarget) return;
+    if (voidReason.trim().length < 10) {
+      setMsg({ text: 'Void reason must be at least 10 characters long.', type: 'error' });
+      return;
+    }
+    setVoidBusy(true);
+    try {
+      await voidTeachingRecordAction(voidTarget.id, voidReason.trim());
+      setVoidTarget(null);
+      setVoidReason('');
+      setMsg({
+        text: `Teaching record for "${voidTarget.topic_name}" (${voidTarget.teacher_name}) voided successfully.`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      setMsg({ text: err.message || 'Failed to void teaching record', type: 'error' });
+    } finally {
+      setVoidBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {msg && (
@@ -161,7 +207,7 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
       </div>
 
       {/* Faculty Table */}
-      <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+      <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-900/90 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[10.5px]">
             <tr>
@@ -227,6 +273,97 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
         </table>
       </div>
 
+      {/* Faculty Teaching Records Monitoring */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Faculty Teaching Records Monitoring</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              Audit log of lectures directly marked taught by faculty members ({teachingRecords.filter((tr) => !tr.is_voided).length} active).
+            </p>
+          </div>
+        </div>
+
+        <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="bg-slate-900/90 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[10.5px]">
+              <tr>
+                <th className="py-2.5 px-3 w-28 border-r border-slate-800/80">Session Date</th>
+                <th className="py-2.5 px-4 border-r border-slate-800/80">Faculty Member</th>
+                <th className="py-2.5 px-3 w-36 border-r border-slate-800/80">Course & Subject</th>
+                <th className="py-2.5 px-4 border-r border-slate-800/80">Topic Endorsed</th>
+                <th className="py-2.5 px-3 w-28 text-center border-r border-slate-800/80">Status</th>
+                <th className="py-2.5 px-4 border-r border-slate-800/80">Remarks / Audit Note</th>
+                <th className="py-2.5 px-3 w-32 text-right">Governance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 font-sans">
+              {teachingRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-slate-500 text-xs">
+                    No faculty teaching records logged yet.
+                  </td>
+                </tr>
+              ) : (
+                teachingRecords.map((tr) => (
+                  <tr key={tr.id} className="hover:bg-slate-900/60 transition-colors text-slate-300">
+                    <td className="py-2.5 px-3 font-mono text-slate-400 border-r border-slate-800/60 whitespace-nowrap">
+                      {tr.session_date}
+                    </td>
+                    <td className="py-2.5 px-4 font-semibold text-slate-100 border-r border-slate-800/60 whitespace-nowrap">
+                      {tr.teacher_name}
+                    </td>
+                    <td className="py-2.5 px-3 border-r border-slate-800/60 whitespace-nowrap">
+                      <span className="font-semibold text-slate-200 block">{tr.subject_name}</span>
+                      <span className="text-[10px] font-mono text-indigo-400 uppercase">{tr.course_code}</span>
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-200 border-r border-slate-800/60">
+                      #{tr.topic_seq} &bull; {tr.topic_name}
+                    </td>
+                    <td className="py-2.5 px-3 text-center border-r border-slate-800/60 whitespace-nowrap">
+                      {tr.is_voided ? (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                          Voided
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          {tr.status}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-4 text-xs text-slate-400 border-r border-slate-800/60">
+                      {tr.is_voided
+                        ? `Voided (${tr.voided_by || 'Admin'}): ${tr.void_reason || ''}`
+                        : tr.remarks || '—'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                      {tr.is_voided ? (
+                        <span className="text-[10px] font-mono text-slate-500">Retracted</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVoidTarget(tr);
+                            setVoidReason('');
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 px-2.5 py-1 rounded transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Void</span>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Add Faculty Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
@@ -267,6 +404,64 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
                   className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white"
                 >
                   Save Faculty
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Faculty Modal */}
+      {editingTeacher && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-white">Edit Faculty Profile</h3>
+            <form onSubmit={handleUpdateTeacher} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Full Name & Rank</label>
+                <input
+                  type="text"
+                  required
+                  value={editingTeacher.name}
+                  onChange={(e) => setEditingTeacher({ ...editingTeacher, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Phone Number (Optional)</label>
+                <input
+                  type="text"
+                  value={editingTeacher.phone || ''}
+                  onChange={(e) => setEditingTeacher({ ...editingTeacher, phone: e.target.value || null })}
+                  placeholder="+91 98765 00000"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="tea_active"
+                  checked={editingTeacher.active}
+                  onChange={(e) => setEditingTeacher({ ...editingTeacher, active: e.target.checked })}
+                  className="rounded border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0"
+                />
+                <label htmlFor="tea_active" className="text-xs font-medium text-slate-300">
+                  Faculty account is currently active
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTeacher(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
@@ -372,6 +567,53 @@ export function FacultyManager({ teachers, subjects }: FacultyManagerProps) {
                   className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
                 >
                   {pinBusy ? 'Resetting…' : 'Reset PIN'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Void Teaching Record Modal — Admin */}
+      {voidTarget && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-amber-400" />
+              Void Teaching Record — {voidTarget.teacher_name}
+            </h3>
+            <p className="text-xs text-slate-400">
+              Retracting teaching record for <strong className="text-slate-200">{voidTarget.topic_name}</strong> ({voidTarget.course_code}). Provide a mandatory audit reason (at least 10 characters).
+            </p>
+            <form onSubmit={handleVoidRecord} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 block mb-1">
+                  Governance Void Reason
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  minLength={10}
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  placeholder="e.g. Incorrect topic logged by faculty; retracting per academy governance."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setVoidTarget(null); setVoidReason(''); }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={voidBusy}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
+                >
+                  {voidBusy ? 'Voiding…' : 'Confirm Void'}
                 </button>
               </div>
             </form>

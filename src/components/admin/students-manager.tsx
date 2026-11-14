@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   createStudentAction,
   updateStudentAction,
   bulkImportStudentsCsvAction,
   resetStudentPinAction,
 } from '@/app/actions/admin-actions';
-import { Plus, Edit2, Upload, Download, KeyRound } from 'lucide-react';
+import { Plus, Edit2, Upload, Download, KeyRound, ExternalLink } from 'lucide-react';
 
 interface StudentItem {
   id: string;
@@ -173,7 +174,7 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
       </div>
 
       {/* Student Sheet Table */}
-      <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+      <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-slate-900/90 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[10.5px]">
             <tr>
@@ -181,7 +182,7 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
               <th className="py-2.5 px-4 border-r border-slate-800/80">Student Name</th>
               <th className="py-2.5 px-4 border-r border-slate-800/80">Enrolled Courses</th>
               <th className="py-2.5 px-3 w-28 text-center border-r border-slate-800/80">Status</th>
-              <th className="py-2.5 px-3 w-32 text-right">Actions</th>
+              <th className="py-2.5 px-3 w-40 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60 font-sans">
@@ -210,7 +211,14 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
                   </span>
                 </td>
                 <td className="py-2.5 px-3 text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Link
+                      href={`/student?studentId=${stu.id}`}
+                      className="p-1 rounded hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300"
+                      title="Inspect Student Progress & Audit Timeline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Link>
                     <button
                       onClick={() => { setPinResetStudent(stu); setNewPin(''); }}
                       className="p-1 rounded hover:bg-amber-500/20 text-amber-400 hover:text-amber-300"
