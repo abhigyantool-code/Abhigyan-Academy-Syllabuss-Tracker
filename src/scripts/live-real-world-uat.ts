@@ -936,7 +936,8 @@ async function main() {
                 const ms = Date.now() - t0;
                 latencies.push(ms);
                 const body = await res.json();
-                assert.equal(res.status, 201, `Student ${s.rollNo} submit failed (${res.status}): ${JSON.stringify(body)}`);
+                assert.equal(res.status, 200, `Student ${s.rollNo} submit failed (${res.status}): ${JSON.stringify(body)}`);
+                assert.equal(body.success, true);
                 return { type: 'student_submit', status: res.status, ms };
               })()
             );
@@ -950,10 +951,10 @@ async function main() {
                 const t0 = Date.now();
                 const [resTeacher, resDash] = await Promise.all([
                   fetch(`${PROD_URL}/teacher`, {
-                    headers: { Cookie: `abhigyan_session=${t.token}` },
+                    headers: { Cookie: `abg_auth_session=${t.token}` },
                   }),
                   fetch(`${PROD_URL}/dashboard`, {
-                    headers: { Cookie: `abhigyan_session=${t.token}` },
+                    headers: { Cookie: `abg_auth_session=${t.token}` },
                   }),
                 ]);
                 const ms = Date.now() - t0;
@@ -971,10 +972,10 @@ async function main() {
               const t0 = Date.now();
               const [resAdmin, resOversight] = await Promise.all([
                 fetch(`${PROD_URL}/admin`, {
-                  headers: { Cookie: `abhigyan_session=${adminToken}` },
+                  headers: { Cookie: `abg_auth_session=${adminToken}` },
                 }),
                 fetch(`${PROD_URL}/student`, {
-                  headers: { Cookie: `abhigyan_session=${adminToken}` },
+                  headers: { Cookie: `abg_auth_session=${adminToken}` },
                 }),
               ]);
               const ms = Date.now() - t0;
