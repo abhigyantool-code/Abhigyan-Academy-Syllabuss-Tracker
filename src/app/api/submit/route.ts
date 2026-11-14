@@ -5,9 +5,10 @@ import { verifyStudent } from '@/lib/student-guard';
 import { submitEntrySchema, analyzeMisuseFlags } from '@/lib/submission-validation';
 import { getClientIp } from '@/lib/rate-limit';
 
-// In-memory sliding window rate limiter: max 30 submissions per IP per minute (bounded to prevent OOM, BUG-041)
+// In-memory sliding window rate limiter: max 120 submissions per IP per minute (supports 75+ students on shared school NAT Wi-Fi; bounded to prevent OOM, BUG-041)
 const ipRateLimits = new Map<string, { count: number; resetAt: number }>();
 const MAX_SUBMIT_IP_BUCKETS = 10_000;
+const MAX_SUBMISSIONS_PER_IP_PER_MINUTE = 120;
 
 function checkIpRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -31,7 +32,7 @@ function checkIpRateLimit(ip: string): boolean {
     ipRateLimits.set(ip, { count: 1, resetAt: now + 60_000 });
     return true;
   }
-  if (limit.count >= 30) {
+  if (limit.count >= MAX_SUBMISSIONS_PER_IP_PER_MINUTE) {
     return false;
   }
   limit.count++;
@@ -40,7 +41,7 @@ function checkIpRateLimit(ip: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    // 0. IP-Level Rate Limit (Roadmap 2D: max 30 requests per minute)
+    // 0. IP-Level Rate Limit (max 120 requests per minute for shared classroom NAT)
     const clientIp = getClientIp(request.headers);
 
     if (!checkIpRateLimit(clientIp)) {

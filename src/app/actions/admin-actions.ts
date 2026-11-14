@@ -191,6 +191,8 @@ export async function createSubjectAction(courseId: string, name: string, sortOr
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true, subject };
 }
 
@@ -214,6 +216,8 @@ export async function updateSubjectAction(id: string, name: string, sortOrder: n
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true, subject: updatedSubject };
 }
 
@@ -233,6 +237,8 @@ export async function deleteSubjectAction(id: string) {
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true };
 }
 
@@ -263,6 +269,8 @@ export async function createTopicAction(
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true, topic };
 }
 
@@ -294,6 +302,8 @@ export async function updateTopicAction(
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true, topic: updatedTopic };
 }
 
@@ -313,6 +323,8 @@ export async function deleteTopicAction(id: string) {
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true };
 }
 
@@ -335,6 +347,8 @@ export async function reorderTopicsAction(subjectId: string, orderedTopicIds: st
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true };
 }
 
@@ -406,6 +420,8 @@ export async function copySyllabusAction(sourceCourseId: string, targetCourseId:
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true, copiedSubjects, copiedTopics };
 }
 
@@ -480,6 +496,8 @@ export async function bulkImportTopicsCsvAction(courseId: string, csvContent: st
 
   revalidatePath('/admin');
   revalidatePath('/dashboard');
+  invalidateSubmitFormDataCache();
+  revalidatePath('/submit');
   return { success: true, count: importedCount, errors };
 }
 

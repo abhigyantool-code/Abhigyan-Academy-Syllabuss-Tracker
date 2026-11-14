@@ -648,11 +648,16 @@ async function main() {
 
         await teacherPage.fill('input[placeholder="Enter current PIN"]', testTeacherTempPin);
         await teacherPage.fill('input[placeholder="e.g. 582190"]', teacherPersonalPin);
+        await teacherPage.fill('input[placeholder="Re-enter new PIN"]', '999999');
+        await teacherPage.click('button:has-text("Save New PIN")');
+        await teacherPage.waitForSelector('text=New PIN and confirmation PIN do not match.', { timeout: 5000 });
+
+        await teacherPage.fill('input[placeholder="Re-enter new PIN"]', teacherPersonalPin);
         await teacherPage.click('button:has-text("Save New PIN")');
         await teacherPage.waitForSelector('text=PIN successfully updated!', { timeout: 10000 });
         await teacherPage.waitForTimeout(1800);
 
-        return `Teacher rejected wrong PIN, logged in with temp PIN (${testTeacherTempPin}), and rotated to personal PIN (${teacherPersonalPin})`;
+        return `Teacher rejected wrong PIN & mismatched confirmation PIN, logged in with temp PIN (${testTeacherTempPin}), and rotated to personal PIN (${teacherPersonalPin})`;
       }
     );
 
@@ -718,7 +723,34 @@ async function main() {
         await teacherPage.click('button[type="submit"]');
         await teacherPage.waitForURL(`${PROD_URL}/teacher`, { timeout: 15000 });
 
-        // Cross-teacher isolation check: Teacher 2 cannot void Teacher 1's record
+        // Cross-teacher isolation check: Teacher 2 (UAT Test Instructor Beta) cannot see or void Teacher 1's record
+        const teacher2Token = signPayload({
+          userId: testTeacher2Id,
+          role: 'faculty',
+          name: 'UAT Test Instructor Beta',
+          teacherId: testTeacher2Id,
+          createdAt: Date.now(),
+        });
+        await teacher2Page.context().addCookies([
+          {
+            name: 'abg_auth_session',
+            value: teacher2Token,
+            url: PROD_URL,
+            httpOnly: true,
+            secure: true,
+            sameSite: 'Lax',
+          },
+        ]);
+        await teacher2Page.goto(`${PROD_URL}/teacher?subject=${ndaSubject.id}`, { waitUntil: 'networkidle' });
+        const teacher2Body = await teacher2Page.locator('main').innerText();
+        assert.ok(
+          teacher2Body.includes('No Subject Allocations Found'),
+          'Unassigned Teacher 2 must be isolated from Teacher 1 subject & records'
+        );
+        // Confirm Teacher 1's record is still intact in PocketBase
+        const trCheck = await pb.collection('teaching_records').getOne(createdTeachingRecordId);
+        assert.equal(trCheck.is_voided, false, 'Teacher 1 record remains intact');
+
         // Verify via My Teaching Records Void / Correct modal (Test #10)
         await teacherPage.click('button:has-text("My Teaching Records")');
         await teacherPage.click('button:has-text("Void / Correct")');
@@ -742,7 +774,7 @@ async function main() {
         });
         for (const r of allTrs) createdTeachingRecordIds.add(r.id);
 
-        return `Endorsed topic "${endorsedTopicName}", verified persistence across logout/login, tested Void/Correction workflow, and re-endorsed for Admin oversight`;
+        return `Endorsed topic "${endorsedTopicName}", verified cross-teacher isolation (Teacher 2 blocked), verified persistence across logout/login, tested Void/Correction workflow, and re-endorsed for Admin oversight`;
       }
     );
 
@@ -907,7 +939,7 @@ async function main() {
           const latencies: number[] = [];
           const tasks: Promise<any>[] = [];
 
-          // 8 Concurrent Student Submissions (each assigned a unique synthetic IP so IP rate-limit isn't tripped by single-runner NAT)
+          // 8 Concurrent Student Submissions sharing a single classroom Wi-Fi NAT IP (198.51.100.50)
           for (let idx = 0; idx < simStudents.length; idx++) {
             const s = simStudents[idx];
             tasks.push(
@@ -917,7 +949,7 @@ async function main() {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'x-forwarded-for': `198.51.100.${50 + idx}`,
+                    'x-forwarded-for': '198.51.100.50',
                   },
                   body: JSON.stringify({
                     courseId: ndaCourse.id,

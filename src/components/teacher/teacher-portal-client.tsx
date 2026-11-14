@@ -51,6 +51,7 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
   const [showPinModal, setShowPinModal] = useState(mustChangePin);
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [pinLoading, setPinLoading] = useState(false);
   const [pinMsg, setPinMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(
     mustChangePin
@@ -110,6 +111,10 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
 
   const handleUpdatePin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (newPin !== confirmPin) {
+      setPinMsg({ text: 'New PIN and confirmation PIN do not match.', type: 'error' });
+      return;
+    }
     setPinLoading(true);
     setPinMsg(null);
     try {
@@ -117,6 +122,7 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
       setPinMsg({ text: 'PIN successfully updated! Remember your new PIN.', type: 'success' });
       setOldPin('');
       setNewPin('');
+      setConfirmPin('');
       setTimeout(() => {
         setShowPinModal(false);
         router.replace('/teacher');
@@ -728,10 +734,12 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
                 </label>
                 <input
                   type="password"
+                  inputMode="numeric"
                   required
+                  maxLength={8}
                   placeholder="Enter current PIN"
                   value={oldPin}
-                  onChange={(e) => setOldPin(e.target.value)}
+                  onChange={(e) => setOldPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -742,11 +750,31 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
                 </label>
                 <input
                   type="password"
+                  inputMode="numeric"
                   required
                   maxLength={8}
                   placeholder="e.g. 582190"
                   value={newPin}
-                  onChange={(e) => setNewPin(e.target.value)}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  Must be 4–8 digits. Avoid simple patterns like 1234 or 0000.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-400 block mb-1">
+                  Confirm New PIN
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  required
+                  maxLength={8}
+                  placeholder="Re-enter new PIN"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>

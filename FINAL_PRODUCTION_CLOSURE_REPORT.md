@@ -170,17 +170,19 @@
 
 ### 2.7 Real-World User Acceptance Testing (UAT) & Tomorrow Launch Readiness
 - **Scope Executed:** Full real-world workflow assessment across separate Student, Teacher, and Administrator browser profiles against live production (`https://syllabus360.abhigyanintelligence.cloud`), codified in `src/scripts/live-real-world-uat.ts` (`22 / 22 PASS`).
-- **UAT Defects Discovered, Fixed, Deployed (`commit d807bfd`), and Re-Verified Live:**
+- **UAT Defects Discovered, Fixed, Deployed, and Re-Verified Live:**
   1. `UAT-BUG-001` (High): Admin-generated and admin-reset temporary PINs did not set `mustChangePin: true` because `pin_hash` lacked a temporary marker. Fixed via `$temp` suffix (`markHashAsTemporary` / `isTemporaryPinHash`) in `src/lib/pin-hash.ts`, `src/app/actions/auth-actions.ts`, and `src/app/actions/admin-actions.ts`.
   2. `UAT-BUG-002` (Medium): Admin Faculty Manager lacked an Edit Faculty modal for existing teachers. Added **Edit Faculty Profile** modal in `src/components/admin/faculty-manager.tsx`.
   3. `UAT-BUG-003` (Low): Admin Courses Manager lacked an Edit Course modal. Added **Edit Course** modal in `src/components/admin/courses-manager.tsx`.
   4. `UAT-BUG-004` (Medium): Newly generated Daily Class Codes showed `Expired` in the Admin dashboard due to lexicographical comparison of space-delimited PocketBase timestamps (`YYYY-MM-DD HH:mm:ss.SSSZ`) against ISO `T` strings. Fixed in `src/lib/admin-data.ts` using `new Date(...).getTime()`.
   5. `UAT-BUG-005` (High): Teacher Portal lacked a historical **My Teaching Records** view, a **Void / Correct** action for erroneous teaching logs, an enrolled student count badge, and a CSV export button (`type=topics`). Fixed across `src/lib/teacher-data.ts`, `src/components/teacher/teacher-portal-client.tsx`, `src/components/admin/faculty-manager.tsx`, and `src/app/api/export/route.ts`.
   6. `UAT-BUG-006` (Medium): Student Dashboard (`/student`) lacked an **Assigned Subjects & Syllabus Topics** breakdown, and `/submit` did not pre-populate the logged-in student's Roll Number and Course. Fixed in `src/app/student/page.tsx`, `src/app/submit/page.tsx`, and `src/components/submit/student-submit-form.tsx`.
-  7. `UAT-BUG-007` (Medium): In-memory 5-minute cache on `/submit` (`cachedPayload` in `src/lib/submit-data.ts`) caused newly created teachers/subjects/topics to not appear immediately on `/submit`. Fixed by exporting `invalidateSubmitFormDataCache()` and calling it in `src/app/actions/admin-actions.ts`.
+  7. `UAT-BUG-007` (Medium): In-memory cache on `/submit` (`cachedSubmitData` in `src/lib/submit-data.ts`) caused newly created curriculum subjects/topics/teachers to not appear immediately on `/submit`. Fixed by exporting `invalidateSubmitFormDataCache()` and calling it across all curriculum, course, faculty, student, and class code actions in `src/app/actions/admin-actions.ts`.
+  8. `UAT-BUG-008` (Low): Teacher Change PIN modal in `src/components/teacher/teacher-portal-client.tsx` lacked numeric input filtering (`inputMode="numeric"`) and a **Confirm New PIN** field. Fixed in `src/components/teacher/teacher-portal-client.tsx`.
+  9. `UAT-BUG-009` (High): Shared Classroom Wi-Fi NAT rate limiting in `src/lib/rate-limit.ts` permanently set `ipEntry.lockedUntil = now + LOCKOUT_MS` (15 minutes) on transient `inFlight` concurrency even when `ipEntry.attempts === 0`, and `src/app/api/submit/route.ts` capped submissions at `30`/min per IP. Fixed in `src/lib/rate-limit.ts` and raised per-IP submission rate limit to `120`/min in `src/app/api/submit/route.ts`.
 - **12-Session Concurrent Launch Simulation:**
-  - Executed 12 simultaneous sessions (8 students logging in & submitting, 3 teachers logging in & recording classes, 1 admin monitoring `/dashboard` & `/student`) against live production (`min=857ms`, `avg=1892ms`, `p95=2387ms`, `max=2387ms`, `0` HTTP 5xx errors, deterministic `409 Conflict` duplicate race rejection).
-  - All synthetic `[UAT-TEST-ONLY]` records were purged post-test, leaving exact baseline counts (`75` students, `8` teachers, `12` entries, `7` teaching records).
+  - Executed 12 simultaneous sessions (8 students sharing a single classroom NAT IP `198.51.100.50` logging in & submitting, 3 teachers logging in & loading portals, 1 admin monitoring `/admin` & `/student`) against live production (`0` HTTP 5xx errors, deterministic `409 Conflict` duplicate race rejection).
+  - All synthetic UAT records were purged post-test, leaving exact baseline counts (`75` students, `8` teachers, `12` entries, `7` teaching records).
 - **Detailed Deliverables:** See [REAL_WORLD_USER_ACCEPTANCE_TEST_REPORT.md](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/REAL_WORLD_USER_ACCEPTANCE_TEST_REPORT.md) and [TOMORROW_LAUNCH_READINESS_REPORT.md](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/TOMORROW_LAUNCH_READINESS_REPORT.md).
 
 ---
@@ -189,7 +191,7 @@
 
 | Verification Suite | Target | Result | Evidence |
 |---|---|:---:|---|
-| **Automated Unit Tests** | `npm run test:unit` (43 test suites) | **139 / 139 PASS** | 0 failures across 139 tests (including `uat-fixes.test.ts`) |
+| **Automated Unit Tests** | `npm run test:unit` (43 test suites) | **140 / 140 PASS** | 0 failures across 140 tests (including `src/tests/unit/admin-pin-management.test.ts` and `src/tests/unit/pin-auth.test.ts`) |
 | **Live Real-World UAT & Concurrency** | `src/scripts/live-real-world-uat.ts` | **22 / 22 PASS** | Student (16), Teacher (17), Admin (16), Cross-Role A–E, Mobile/Desktop, 12-Session Concurrency |
 | **Portal Separation & Isolation** | `src/scripts/live-portal-isolation-tests.ts` | **44 / 44 PASS** | 100% boundary isolation across roles |
 | **Live Production Smoke Tests** | `src/scripts/live-production-smoke-tests.ts` | **7 / 7 PASS** | Health, Admin login, Teacher portal, Endorsements, Schema, Invariants all verified |

@@ -152,8 +152,34 @@ Every failure or workflow gap found during our real-world UAT was fixed, unit-te
 - **Expected Behavior:** Newly created teachers, subject allocations, courses, and topics must appear on `/submit` immediately after an Admin saves changes in `/admin`.
 - **Actual Behavior (Before Fix):** Even though `admin-actions.ts` called `revalidatePath('/submit')`, `getSubmitFormData()` in [src/lib/submit-data.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/lib/submit-data.ts) returned a module-level in-memory object `cachedSubmitData` for 60 seconds without being invalidated by `admin-actions.ts`.
 - **Root Cause:** Module-level cache `cachedSubmitData` in `submit-data.ts` had no invalidation hook in `admin-actions.ts`.
-- **Implemented Fix:** Added `invalidateSubmitFormDataCache()` in [src/lib/submit-data.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/lib/submit-data.ts) (and reduced micro-cache TTL to 3 seconds), and called `invalidateSubmitFormDataCache()` across all curriculum/faculty/student/code mutations in [src/app/actions/admin-actions.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/app/actions/admin-actions.ts).
+- **Implemented Fix:** Added `invalidateSubmitFormDataCache()` in [src/lib/submit-data.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/lib/submit-data.ts) (and reduced micro-cache TTL to 3 seconds), and called `invalidateSubmitFormDataCache()` and `revalidatePath('/submit')` across all 9 curriculum (subject/topic/clone/CSV), course, faculty, student, and class code mutations in [src/app/actions/admin-actions.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/app/actions/admin-actions.ts).
 - **Verification After Fixing:** Verified live on production in `ADM-03` -> `STU-04` (`PASS`: teacher created and assigned in `ADM-03` was immediately selectable on `/submit` in `STU-04`).
+
+---
+
+### Issue 8: `UAT-BUG-008` — Teacher Change PIN Modal Lacked "Confirm New PIN" Field and Numeric Filtering
+- **Severity:** **Low / Usability**
+- **Exact Reproduction Steps:**
+  1. Log in as a Teacher for the first time with a temporary PIN on `/teacher/login` -> redirected to `/teacher?mustChangePin=true`.
+  2. Inspect the "Change Faculty Security PIN" modal.
+- **Expected Behavior:** Like `StudentPinModal` (`src/components/student/student-pin-modal.tsx`), the Teacher PIN modal should enforce numeric-only input (`inputMode="numeric"`, `.replace(/\D/g, '')`), explain the 4–8 digit rule, and require a **Confirm New PIN** field so a teacher cannot accidentally mistype a masked PIN and lock themselves out.
+- **Actual Behavior (Before Fix):** `TeacherPortalClient` in [src/components/teacher/teacher-portal-client.tsx](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/components/teacher/teacher-portal-client.tsx) rendered only a single masked `New 4–8 Digit PIN` input with no confirmation field and no client-side digit filtering.
+- **Root Cause:** Asymmetric form implementation between `StudentPinModal` and `TeacherPortalClient`.
+- **Implemented Fix:** Added `confirmPin` state, mismatch validation (`"New PIN and confirmation PIN do not match."`), `inputMode="numeric"`, digit filtering (`.replace(/\D/g, '').slice(0, 8)`), and the **Confirm New PIN** input to [src/components/teacher/teacher-portal-client.tsx](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/components/teacher/teacher-portal-client.tsx).
+- **Verification After Fixing:** Verified live on production in `TEA-01` (`PASS`: mismatched confirmation PIN rejected with clear message before saving matched PIN).
+
+---
+
+### Issue 9: `UAT-BUG-009` — Shared Classroom Wi-Fi NAT Transient Concurrency Poisoned 15-Minute IP Lockout (`lockedUntil`)
+- **Severity:** **High**
+- **Exact Reproduction Steps:**
+  1. In a classroom sharing a single NAT IP, 11 legitimate students initiate PIN authentication or submission concurrently while the first 10 `scrypt` verifications are still in-flight (`ipEntry.inFlight === 10`, `ipEntry.attempts === 0`).
+  2. Inspect `ipEntry.lockedUntil` in [src/lib/rate-limit.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/lib/rate-limit.ts) after the 10 in-flight requests complete with `recordPinSuccess()`.
+- **Expected Behavior:** While `inFlight` reservations must throttle concurrent brute-force races (`BUG-038`), transient `inFlight` saturation by legitimate students must **not** permanently set `ipEntry.lockedUntil = now + LOCKOUT_MS` (15 minutes) when `ipEntry.attempts < MAX_IP_ATTEMPTS`. Furthermore, `POST /api/submit` must allow at least `120` submissions/minute per NAT IP so a 75-student classroom on shared Wi-Fi can submit at the end of a lecture.
+- **Actual Behavior (Before Fix):** `checkStudentPinRateLimit` and `isIpRateLimited` in [src/lib/rate-limit.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/lib/rate-limit.ts) set `ipEntry.lockedUntil = now + LOCKOUT_MS` whenever `ipEntry.attempts + ipEntry.inFlight >= MAX_IP_ATTEMPTS`, even when `ipEntry.attempts === 0`! And `src/app/api/submit/route.ts` capped submissions at `30`/min per IP.
+- **Root Cause:** Conflating transient `inFlight` concurrency throttling with persistent 15-minute failed-attempt lockouts (`lockedUntil`).
+- **Implemented Fix:** Updated [src/lib/rate-limit.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/lib/rate-limit.ts) so `lockedUntil = now + LOCKOUT_MS` is only set when actual failed `attempts >= MAX_IP_ATTEMPTS` (or `MAX_STUDENT_FAILURES`), while `attempts + inFlight >= MAX` transiently throttles excess concurrent requests until in-flight requests complete. Raised `MAX_SUBMISSIONS_PER_IP_PER_MINUTE` in [src/app/api/submit/route.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/app/api/submit/route.ts) from `30` to `120`.
+- **Verification After Fixing:** Verified by unit test in [src/tests/unit/pin-auth.test.ts](file:///home/ayush/.gemini/antigravity/scratch/syllabus-tracker/src/tests/unit/pin-auth.test.ts) (`140 / 140 PASS`) and live on production in `SIM-01` with all 8 concurrent students sharing a single classroom NAT IP (`198.51.100.50`).
 
 ---
 

@@ -365,6 +365,30 @@ describe('BUG-031 & BUG-032 Security Hardening & Remediation Tests', () => {
       assert.strictEqual(student16Check.allowed, true, 'Academy Wi-Fi must NOT be locked out by successful student logins');
     });
 
+    it('should NOT permanently lock out shared classroom Wi-Fi IP when transient in-flight concurrency hits threshold and then succeeds', () => {
+      const sharedWifiIp = '103.21.244.20';
+
+      // 10 students initiate concurrent logins simultaneously (inFlight = 10, attempts = 0)
+      for (let i = 1; i <= 10; i++) {
+        const res = checkStudentPinRateLimit(`concurrent_stu_${i}`, sharedWifiIp);
+        assert.strictEqual(res.allowed, true);
+      }
+
+      // 11th concurrent student arrives while all 10 are still in-flight -> transiently throttled
+      const res11 = checkStudentPinRateLimit('concurrent_stu_11', sharedWifiIp);
+      assert.strictEqual(res11.allowed, false);
+
+      // The 10 in-flight students finish scrypt verification with valid PINs
+      for (let i = 1; i <= 10; i++) {
+        recordPinSuccess(`concurrent_stu_${i}`, sharedWifiIp);
+      }
+
+      // Now Student 11 retries 100ms later -> must be allowed (IP must NOT have been locked for 15 minutes!)
+      const retry11 = checkStudentPinRateLimit('concurrent_stu_11', sharedWifiIp);
+      assert.strictEqual(retry11.allowed, true, 'Shared Wi-Fi IP must immediately recover after in-flight requests succeed');
+      recordPinSuccess('concurrent_stu_11', sharedWifiIp);
+    });
+
     it('should pre-emptively reject locked-out IPs before querying database (isIpRateLimited)', () => {
       const lockedIp = '198.51.100.99';
 

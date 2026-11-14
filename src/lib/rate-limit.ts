@@ -137,12 +137,18 @@ export function isIpRateLimited(clientIp: string): { allowed: boolean; error?: s
       };
     }
     if (now - ipEntry.lastAttempt < WINDOW_MS) {
-      const effectiveAttempts = ipEntry.attempts + ipEntry.inFlight;
-      if (effectiveAttempts >= MAX_IP_ATTEMPTS) {
+      if (ipEntry.attempts >= MAX_IP_ATTEMPTS) {
         ipEntry.lockedUntil = now + LOCKOUT_MS;
         return {
           allowed: false,
           error: 'Too many requests from your network. Locked for 15 minutes.',
+        };
+      }
+      const effectiveAttempts = ipEntry.attempts + ipEntry.inFlight;
+      if (effectiveAttempts >= MAX_IP_ATTEMPTS) {
+        return {
+          allowed: false,
+          error: 'Too many requests from your network. Please try again in a moment.',
         };
       }
     }
@@ -174,12 +180,18 @@ export function checkStudentPinRateLimit(
     }
 
     if (now - ipEntry.lastAttempt < WINDOW_MS) {
-      const effectiveIpAttempts = ipEntry.attempts + ipEntry.inFlight;
-      if (effectiveIpAttempts >= MAX_IP_ATTEMPTS) {
+      if (ipEntry.attempts >= MAX_IP_ATTEMPTS) {
         ipEntry.lockedUntil = now + LOCKOUT_MS;
         return {
           allowed: false,
           error: 'Too many authentication requests from your network. Locked for 15 minutes.',
+        };
+      }
+      const effectiveIpAttempts = ipEntry.attempts + ipEntry.inFlight;
+      if (effectiveIpAttempts >= MAX_IP_ATTEMPTS) {
+        return {
+          allowed: false,
+          error: 'Too many concurrent authentication requests from your network. Please try again in a moment.',
         };
       }
     } else {
@@ -201,12 +213,18 @@ export function checkStudentPinRateLimit(
     }
 
     if (now - studentEntry.lastAttempt < WINDOW_MS) {
-      const effectiveStudentAttempts = studentEntry.attempts + studentEntry.inFlight;
-      if (effectiveStudentAttempts >= MAX_STUDENT_FAILURES) {
+      if (studentEntry.attempts >= MAX_STUDENT_FAILURES) {
         studentEntry.lockedUntil = now + LOCKOUT_MS;
         return {
           allowed: false,
           error: 'Account locked for 15 minutes due to repeated failed PIN attempts.',
+        };
+      }
+      const effectiveStudentAttempts = studentEntry.attempts + studentEntry.inFlight;
+      if (effectiveStudentAttempts >= MAX_STUDENT_FAILURES) {
+        return {
+          allowed: false,
+          error: 'Too many concurrent authentication attempts for this account. Please wait a moment.',
         };
       }
     } else {
@@ -270,6 +288,9 @@ export function recordPinFailure(studentId: string, clientIp: string): void {
     ipEntry.attempts += 1;
   }
   ipEntry.lastAttempt = now;
+  if (ipEntry.attempts >= MAX_IP_ATTEMPTS) {
+    ipEntry.lockedUntil = now + LOCKOUT_MS;
+  }
   ipBuckets.set(clientIp, ipEntry);
 
   // Student bucket
