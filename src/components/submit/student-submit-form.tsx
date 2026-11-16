@@ -31,6 +31,14 @@ import {
 } from 'lucide-react';
 import { changeStudentPinAction, verifyStudentLookupAction } from '@/app/actions/auth-actions';
 
+export interface LoggedInStudentSession {
+  id: string;
+  name: string;
+  rollNo: string;
+  courseId?: string;
+  courseIds?: string[];
+}
+
 interface StudentSubmitFormProps {
   initialData: {
     courses: SubmitCourseData[];
@@ -39,21 +47,22 @@ interface StudentSubmitFormProps {
     topics: SubmitTopic[];
     students: SubmitStudent[];
   };
-  defaultStudentSession?: {
-    id: string;
-    name: string;
-    rollNo: string;
-    courseId?: string;
-  } | null;
+  defaultStudentSession?: LoggedInStudentSession | null;
+  loggedInStudent?: LoggedInStudentSession | null;
 }
 
-export function StudentSubmitForm({ initialData, defaultStudentSession = null }: StudentSubmitFormProps) {
+export function StudentSubmitForm({
+  initialData,
+  defaultStudentSession = null,
+  loggedInStudent = null,
+}: StudentSubmitFormProps) {
+  const activeStudentSession = loggedInStudent || defaultStudentSession;
   const { courses, teachers, subjects, topics, students } = initialData;
 
   const initialCourseId =
-    (defaultStudentSession?.courseId &&
-      courses.some((c) => c.id === defaultStudentSession.courseId) &&
-      defaultStudentSession.courseId) ||
+    (activeStudentSession?.courseId &&
+      courses.some((c) => c.id === activeStudentSession.courseId) &&
+      activeStudentSession.courseId) ||
     courses[0]?.id ||
     '';
 
@@ -61,11 +70,11 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(defaultStudentSession?.id || '');
-  const [studentRollNo, setStudentRollNo] = useState<string>(defaultStudentSession?.rollNo || '');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(activeStudentSession?.id || '');
+  const [studentRollNo, setStudentRollNo] = useState<string>(activeStudentSession?.rollNo || '');
   const [verifiedStudent, setVerifiedStudent] = useState<{ id: string; name: string; roll_no: string } | null>(
-    defaultStudentSession
-      ? { id: defaultStudentSession.id, name: defaultStudentSession.name, roll_no: defaultStudentSession.rollNo }
+    activeStudentSession
+      ? { id: activeStudentSession.id, name: activeStudentSession.name, roll_no: activeStudentSession.rollNo }
       : null
   );
   const [isVerifying, setIsVerifying] = useState(false);
@@ -146,8 +155,31 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
 
   // 4. Enrolled Students in this course
   const enrolledStudents = useMemo(() => {
-    return students.filter((s) => s.course_id === selectedCourseId);
-  }, [students, selectedCourseId]);
+    const filtered = students.filter((s) => {
+      if (Array.isArray(s.courseIds)) {
+        return s.courseIds.length === 0 || s.courseIds.includes(selectedCourseId);
+      }
+      return !s.course_id || s.course_id === selectedCourseId;
+    });
+
+    if (
+      activeStudentSession &&
+      (!activeStudentSession.courseId ||
+        activeStudentSession.courseId === selectedCourseId ||
+        activeStudentSession.courseIds?.includes(selectedCourseId)) &&
+      !filtered.some((s) => s.id === activeStudentSession.id)
+    ) {
+      filtered.unshift({
+        id: activeStudentSession.id,
+        name: activeStudentSession.name,
+        roll_no: activeStudentSession.rollNo,
+        course_id: selectedCourseId,
+        courseIds: activeStudentSession.courseIds || [selectedCourseId],
+      });
+    }
+
+    return filtered;
+  }, [students, selectedCourseId, activeStudentSession]);
 
   // Helper to extract clean serial number display (e.g. "NDA-01" -> "#1")
   const getSerialDisplay = (rollNo: string) => {
@@ -174,8 +206,20 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
   }, [enrolledStudents, studentSearch]);
 
   const selectedStudentObj = useMemo(() => {
-    return enrolledStudents.find((s) => s.id === selectedStudentId);
-  }, [enrolledStudents, selectedStudentId]);
+    return (
+      enrolledStudents.find((s) => s.id === selectedStudentId) ||
+      students.find((s) => s.id === selectedStudentId) ||
+      (activeStudentSession && activeStudentSession.id === selectedStudentId
+        ? {
+            id: activeStudentSession.id,
+            name: activeStudentSession.name,
+            roll_no: activeStudentSession.rollNo,
+            course_id: selectedCourseId,
+            courseIds: activeStudentSession.courseIds || [selectedCourseId],
+          }
+        : undefined)
+    );
+  }, [enrolledStudents, students, selectedStudentId, activeStudentSession, selectedCourseId]);
 
   // Reset dependent fields when course changes
   const handleCourseChange = (courseId: string) => {
@@ -183,9 +227,33 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
     setSelectedTeacherId('');
     setSelectedSubjectId('');
     setSelectedTopicId('');
-    setSelectedStudentId('');
-    setStudentRollNo('');
-    setVerifiedStudent(null);
+
+    const sessionMatchesCourse =
+      activeStudentSession &&
+      (activeStudentSession.courseId === courseId ||
+        activeStudentSession.courseIds?.includes(courseId) ||
+        students.some(
+          (s) =>
+            s.id === activeStudentSession.id &&
+            (Array.isArray(s.courseIds)
+              ? s.courseIds.length === 0 || s.courseIds.includes(courseId)
+              : !s.course_id || s.course_id === courseId)
+        ));
+
+    if (sessionMatchesCourse && activeStudentSession) {
+      setSelectedStudentId(activeStudentSession.id);
+      setStudentRollNo(activeStudentSession.rollNo);
+      setVerifiedStudent({
+        id: activeStudentSession.id,
+        name: activeStudentSession.name,
+        roll_no: activeStudentSession.rollNo,
+      });
+    } else {
+      setSelectedStudentId('');
+      setStudentRollNo('');
+      setVerifiedStudent(null);
+    }
+
     setVerifyMessage(null);
     setStudentPin('');
     setStudentSearch('');
@@ -254,9 +322,9 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
       setErrorMessage('Please select the specific syllabus topic covered.');
       return;
     }
-    const effectiveStudent = verifiedStudent?.id || selectedStudentId || studentRollNo.trim().toUpperCase();
+    const effectiveStudent = selectedStudentId || verifiedStudent?.id || studentRollNo.trim().toUpperCase();
     if (!effectiveStudent) {
-      setErrorMessage('Please enter your student Roll Number.');
+      setErrorMessage('Please select your student name / roll number.');
       return;
     }
     if (!studentPin.trim() || studentPin.trim().length < 4) {
@@ -310,9 +378,9 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
     e.preventDefault();
     setChangePinMsg(null);
 
-    const studentIdentifier = verifiedStudent?.id || selectedStudentId || studentRollNo.trim().toUpperCase();
+    const studentIdentifier = selectedStudentId || verifiedStudent?.id || studentRollNo.trim().toUpperCase();
     if (!studentIdentifier) {
-      setChangePinMsg({ text: 'Please enter your student Roll Number first (Step 4).', type: 'error' });
+      setChangePinMsg({ text: 'Please select your student name / ID first (Step 4).', type: 'error' });
       return;
     }
     if (!/^\d{4,8}$/.test(changePinNewPin)) {
@@ -569,57 +637,53 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
             </div>
           </div>
 
-          {/* 4. Student Roll Number (PII Protected - BUG-003) */}
+          {/* 4. Student Name / Student ID Dropdown */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+            <label htmlFor="student-select" className="text-xs font-bold text-zinc-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
                   4
                 </span>
-                Student Roll Number
+                Student Name / Student ID
               </span>
-              <span className="text-[11px] font-normal text-zinc-500">e.g. NDA-01, CDS-05</span>
+              <span className="text-[11px] font-normal text-zinc-500">
+                {enrolledStudents.length} enrolled in {currentCourse?.code || 'course'}
+              </span>
             </label>
 
-            {verifiedStudent ? (
-              <div className="flex items-center justify-between bg-zinc-950 border border-emerald-500/50 rounded-xl px-3.5 py-2 text-xs">
-                <div>
-                  <span className="font-bold text-white block">{verifiedStudent.name}</span>
-                  <span className="font-mono text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5 mt-0.5">
-                    <span className="bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">
-                      Verified
-                    </span>
-                    <span className="text-zinc-400">({verifiedStudent.roll_no})</span>
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVerifiedStudent(null);
-                    setSelectedStudentId('');
-                    setStudentRollNo('');
-                  }}
-                  className="text-xs text-zinc-400 hover:text-white bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800"
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <User className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter your Roll Number (e.g. NDA-01, CDS-05)..."
-                  value={studentRollNo}
-                  onChange={(e) => {
-                    setStudentRollNo(e.target.value.toUpperCase());
-                    setVerifiedStudent(null);
-                    setVerifyMessage(null);
-                  }}
-                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono uppercase"
-                />
-              </div>
+            <div className="relative">
+              <select
+                id="student-select"
+                required
+                value={selectedStudentId}
+                onChange={(e) => {
+                  const stuId = e.target.value;
+                  setSelectedStudentId(stuId);
+                  const found = enrolledStudents.find((s) => s.id === stuId);
+                  setStudentRollNo(found ? found.roll_no : '');
+                  setVerifiedStudent(found ? { id: found.id, name: found.name, roll_no: found.roll_no } : null);
+                  setVerifyMessage(null);
+                  setErrorMessage(null);
+                }}
+                className="w-full appearance-none bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium pr-10"
+              >
+                <option value="">-- Select Student Name / Roll No --</option>
+                {enrolledStudents.map((stu) => (
+                  <option key={stu.id} value={stu.id}>
+                    {stu.name} ({stu.roll_no})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-zinc-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {selectedStudentObj && (
+              <p className="text-[11px] text-emerald-400/90 font-mono flex items-center gap-1.5 pt-0.5">
+                <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                <span>
+                  Selected: <strong className="font-sans text-zinc-200">{selectedStudentObj.name}</strong> ({selectedStudentObj.roll_no})
+                </span>
+              </p>
             )}
             {verifyMessage && (
               <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
@@ -667,19 +731,9 @@ export function StudentSubmitForm({ initialData, defaultStudentSession = null }:
             <p className="text-[11px] text-zinc-500">
               Protects your student serial number from proxy submissions by others.
             </p>
-            {/* Verify name & Change PIN links */}
+            {/* Change PIN link */}
             {(selectedStudentId || studentRollNo.trim()) && (
               <div className="flex items-center gap-3 mt-1">
-                {!verifiedStudent && studentRollNo.trim() && studentPin.length >= 4 && (
-                  <button
-                    type="button"
-                    onClick={handleVerifyStudent}
-                    disabled={isVerifying}
-                    className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold transition-colors"
-                  >
-                    {isVerifying ? 'Checking roll number...' : '✓ Verify my name'}
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => { setShowChangePinModal(true); setChangePinMsg(null); }}

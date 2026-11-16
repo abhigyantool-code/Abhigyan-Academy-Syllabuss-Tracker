@@ -13,6 +13,7 @@ import {
   resetRateLimitsForTesting,
 } from '../../lib/rate-limit';
 import { hashPin, verifyPinDual } from '../../lib/pin-hash';
+import { sanitizeStudentsForSubmit } from '../../lib/submit-data';
 
 describe('BUG-003 & BUG-017: Student Privacy & Dedicated Student Portal Tests', () => {
   beforeEach(() => {
@@ -132,6 +133,69 @@ describe('BUG-003 & BUG-017: Student Privacy & Dedicated Student Portal Tests', 
       // Reject incorrect PIN
       const wrongPin = await verifyPinDual('9999', hash, '1234');
       assert.equal(wrongPin.valid, false);
+    });
+  });
+
+  describe('Student Submission Dropdown Roster & Security Invariant (sanitizeStudentsForSubmit)', () => {
+    const rawStudents = [
+      {
+        id: 'stu_010',
+        roll_no: 'NDA-10',
+        name: 'Rohan Sharma',
+        active: true,
+        pin: '1234',
+        pin_hash: 'scrypt$secret_hash_10',
+      },
+      {
+        id: 'stu_002',
+        roll_no: 'NDA-2',
+        name: 'Mafruza Rahman',
+        active: true,
+        pin: '',
+        pin_hash: 'scrypt$secret_hash_02',
+      },
+      {
+        id: 'stu_inactive',
+        roll_no: 'NDA-1',
+        name: 'Inactive Cadet',
+        active: false,
+        pin: '9999',
+        pin_hash: 'scrypt$secret_hash_01',
+      },
+    ];
+
+    const rawEnrollments = [
+      { student: 'stu_002', course: 'course_nda' },
+      { student: 'stu_002', course: 'course_cds' },
+      { student: 'stu_010', course: 'course_nda' },
+      { student: 'stu_inactive', course: 'course_nda' },
+    ];
+
+    it('should include only active students sorted naturally by roll_no', () => {
+      const sanitized = sanitizeStudentsForSubmit(rawStudents, rawEnrollments);
+      assert.equal(sanitized.length, 2);
+      assert.equal(sanitized[0].id, 'stu_002');
+      assert.equal(sanitized[0].roll_no, 'NDA-2');
+      assert.equal(sanitized[0].name, 'Mafruza Rahman');
+      assert.equal(sanitized[1].id, 'stu_010');
+      assert.equal(sanitized[1].roll_no, 'NDA-10');
+    });
+
+    it('should map enrolled courseIds accurately for multi-course filtering', () => {
+      const sanitized = sanitizeStudentsForSubmit(rawStudents, rawEnrollments);
+      assert.deepEqual(sanitized[0].courseIds, ['course_nda', 'course_cds']);
+      assert.deepEqual(sanitized[1].courseIds, ['course_nda']);
+    });
+
+    it('should strictly strip pin and pin_hash from client student objects', () => {
+      const sanitized = sanitizeStudentsForSubmit(rawStudents, rawEnrollments);
+      const serialized = JSON.stringify(sanitized);
+      assert.equal(serialized.includes('pin'), false);
+      assert.equal(serialized.includes('secret_hash'), false);
+      for (const s of sanitized) {
+        assert.equal('pin' in s, false);
+        assert.equal('pin_hash' in s, false);
+      }
     });
   });
 });

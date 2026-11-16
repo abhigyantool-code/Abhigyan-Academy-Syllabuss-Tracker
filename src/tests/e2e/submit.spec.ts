@@ -44,10 +44,9 @@ test.describe('Abhigyan Academy Student Submission Portal', () => {
     const topicSelect = page.locator('select').nth(2);
     await topicSelect.selectOption({ index: 1 });
 
-    // Search and select student
-    const studentInput = page.locator('input[placeholder*="Type roll number"]');
-    await studentInput.fill('ABG-2026-002');
-    await page.locator('button:has-text("ABG-2026-002")').click();
+    // Select student from dropdown
+    const studentSelect = page.locator('select#student-select');
+    await studentSelect.selectOption({ index: 1 });
 
     // Fill wrong class code
     const classCodeInput = page.locator('input[placeholder="e.g. NDA-942"]');
@@ -80,10 +79,9 @@ test.describe('Abhigyan Academy Student Submission Portal', () => {
     const topicSelect = page.locator('select').nth(2);
     await topicSelect.selectOption({ index: 1 });
 
-    // Search and select student ABG-2026-007
-    const studentInput = page.locator('input[placeholder*="Type roll number"]');
-    await studentInput.fill('ABG-2026-007');
-    await page.locator('button:has-text("ABG-2026-007")').click();
+    // Select student ABG-2026-007 from dropdown
+    const studentSelect = page.locator('select#student-select');
+    await studentSelect.selectOption({ index: 1 });
 
     // Fill valid CDS class code
     const classCodeInput = page.locator('input[placeholder*="NDA-942"]');

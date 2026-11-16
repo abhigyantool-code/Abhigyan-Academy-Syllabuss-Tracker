@@ -22,6 +22,7 @@ export default async function SubmitPage() {
     name: string;
     rollNo: string;
     courseId?: string;
+    courseIds?: string[];
   } | null = null;
 
   if (session?.role === 'student' && (session.studentId || session.userId)) {
@@ -29,14 +30,16 @@ export default async function SubmitPage() {
       const pb = await getPbClient();
       const sId = session.studentId || session.userId;
       const [stu, enrolls] = await Promise.all([
-        pb.collection('students').getOne(sId),
-        pb.collection('enrollments').getFullList({ filter: `student = "${sId}"` }),
+        pb.collection('students').getOne(sId, { fields: 'id,name,roll_no,active' }),
+        pb.collection('enrollments').getFullList({ filter: `student = "${sId}"`, fields: 'course' }),
       ]);
+      const courseIds = enrolls.map((e) => e.course).filter(Boolean);
       defaultStudentSession = {
         id: stu.id,
         name: stu.name,
         rollNo: stu.roll_no,
-        courseId: enrolls[0]?.course || undefined,
+        courseId: courseIds[0] || undefined,
+        courseIds,
       };
     } catch {
       // Non-fatal fallback
