@@ -8,36 +8,25 @@ import {
   SubmitSubject,
   SubmitTopic,
   SubmitStudent,
+  SubmitStudentSession,
+  filterStudentsForCourse,
+  resolveCourseStudentSelection,
 } from '@/lib/submit-data';
 import {
-  GraduationCap,
   BookOpen,
-  User,
   KeyRound,
   CheckCircle2,
-  Clock,
-  Sparkles,
-  Search,
   ChevronDown,
   AlertCircle,
   RefreshCw,
   Send,
-  Layers,
-  ShieldAlert,
-  Lock,
   Eye,
   EyeOff,
   Settings,
 } from 'lucide-react';
-import { changeStudentPinAction, verifyStudentLookupAction } from '@/app/actions/auth-actions';
+import { changeStudentPinAction } from '@/app/actions/auth-actions';
 
-export interface LoggedInStudentSession {
-  id: string;
-  name: string;
-  rollNo: string;
-  courseId?: string;
-  courseIds?: string[];
-}
+export type LoggedInStudentSession = SubmitStudentSession;
 
 interface StudentSubmitFormProps {
   initialData: {
@@ -59,25 +48,21 @@ export function StudentSubmitForm({
   const activeStudentSession = loggedInStudent || defaultStudentSession;
   const { courses, teachers, subjects, topics, students } = initialData;
 
-  const initialCourseId =
-    (activeStudentSession?.courseId &&
-      courses.some((c) => c.id === activeStudentSession.courseId) &&
-      activeStudentSession.courseId) ||
-    courses[0]?.id ||
-    '';
+  const initialSelection = resolveCourseStudentSelection(
+    courses,
+    students,
+    activeStudentSession
+  );
 
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialSelection.courseId);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(activeStudentSession?.id || '');
-  const [studentRollNo, setStudentRollNo] = useState<string>(activeStudentSession?.rollNo || '');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(initialSelection.selectedStudentId);
+  const [studentRollNo, setStudentRollNo] = useState<string>(initialSelection.studentRollNo);
   const [verifiedStudent, setVerifiedStudent] = useState<{ id: string; name: string; roll_no: string } | null>(
-    activeStudentSession
-      ? { id: activeStudentSession.id, name: activeStudentSession.name, roll_no: activeStudentSession.rollNo }
-      : null
+    initialSelection.verifiedStudent
   );
-  const [isVerifying, setIsVerifying] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [studentPin, setStudentPin] = useState<string>('');
   const [showPin, setShowPin] = useState<boolean>(false);
@@ -85,10 +70,6 @@ export function StudentSubmitForm({
   const [status, setStatus] = useState<'covered' | 'partial' | 'revision'>('covered');
   const [remarks, setRemarks] = useState<string>('');
   const [honeypot, setHoneypot] = useState<string>('');
-
-  // Searchable student combobox state (kept for backwards compatibility if needed)
-  const [studentSearch, setStudentSearch] = useState<string>('');
-  const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
 
   // Device ID state
   const [deviceId, setDeviceId] = useState<string>('');
@@ -155,55 +136,8 @@ export function StudentSubmitForm({
 
   // 4. Enrolled Students in this course
   const enrolledStudents = useMemo(() => {
-    const filtered = students.filter((s) => {
-      if (Array.isArray(s.courseIds)) {
-        return s.courseIds.length === 0 || s.courseIds.includes(selectedCourseId);
-      }
-      return !s.course_id || s.course_id === selectedCourseId;
-    });
-
-    if (
-      activeStudentSession &&
-      (!activeStudentSession.courseId ||
-        activeStudentSession.courseId === selectedCourseId ||
-        activeStudentSession.courseIds?.includes(selectedCourseId)) &&
-      !filtered.some((s) => s.id === activeStudentSession.id)
-    ) {
-      filtered.unshift({
-        id: activeStudentSession.id,
-        name: activeStudentSession.name,
-        roll_no: activeStudentSession.rollNo,
-        course_id: selectedCourseId,
-        courseIds: activeStudentSession.courseIds || [selectedCourseId],
-      });
-    }
-
-    return filtered;
+    return filterStudentsForCourse(students, selectedCourseId, activeStudentSession);
   }, [students, selectedCourseId, activeStudentSession]);
-
-  // Helper to extract clean serial number display (e.g. "NDA-01" -> "#1")
-  const getSerialDisplay = (rollNo: string) => {
-    const match = rollNo.match(/-(\d+)$/);
-    return match ? `#${parseInt(match[1], 10)}` : rollNo;
-  };
-
-  // Filtered students for searchable combobox (search by Serial No or Name)
-  const filteredStudents = useMemo(() => {
-    const q = studentSearch.trim().toLowerCase();
-    if (!q) return enrolledStudents;
-    return enrolledStudents.filter((s) => {
-      const match = s.roll_no.match(/-(\d+)$/);
-      const serialNum = match ? parseInt(match[1], 10).toString() : '';
-      const rollLower = s.roll_no.toLowerCase();
-      const nameLower = s.name.toLowerCase();
-      return (
-        nameLower.includes(q) ||
-        rollLower.includes(q) ||
-        serialNum === q ||
-        (match && match[1].startsWith(q))
-      );
-    });
-  }, [enrolledStudents, studentSearch]);
 
   const selectedStudentObj = useMemo(() => {
     return (
@@ -228,35 +162,19 @@ export function StudentSubmitForm({
     setSelectedSubjectId('');
     setSelectedTopicId('');
 
-    const sessionMatchesCourse =
-      activeStudentSession &&
-      (activeStudentSession.courseId === courseId ||
-        activeStudentSession.courseIds?.includes(courseId) ||
-        students.some(
-          (s) =>
-            s.id === activeStudentSession.id &&
-            (Array.isArray(s.courseIds)
-              ? s.courseIds.length === 0 || s.courseIds.includes(courseId)
-              : !s.course_id || s.course_id === courseId)
-        ));
-
-    if (sessionMatchesCourse && activeStudentSession) {
-      setSelectedStudentId(activeStudentSession.id);
-      setStudentRollNo(activeStudentSession.rollNo);
-      setVerifiedStudent({
-        id: activeStudentSession.id,
-        name: activeStudentSession.name,
-        roll_no: activeStudentSession.rollNo,
-      });
-    } else {
-      setSelectedStudentId('');
-      setStudentRollNo('');
-      setVerifiedStudent(null);
-    }
+    const nextSelection = resolveCourseStudentSelection(
+      courses,
+      students,
+      activeStudentSession,
+      courseId,
+      selectedStudentId
+    );
+    setSelectedStudentId(nextSelection.selectedStudentId);
+    setStudentRollNo(nextSelection.studentRollNo);
+    setVerifiedStudent(nextSelection.verifiedStudent);
 
     setVerifyMessage(null);
     setStudentPin('');
-    setStudentSearch('');
     setClassCode('');
     setErrorMessage(null);
     setSuccessData(null);
@@ -275,33 +193,6 @@ export function StudentSubmitForm({
     setSelectedSubjectId(subjectId);
     setSelectedTopicId('');
     setErrorMessage(null);
-  };
-
-  const handleVerifyStudent = async () => {
-    if (!studentRollNo.trim()) {
-      setVerifyMessage('Please enter your roll number first.');
-      return;
-    }
-    if (!studentPin.trim() || studentPin.trim().length < 4) {
-      setVerifyMessage('Please enter your 4-digit PIN first.');
-      return;
-    }
-    setIsVerifying(true);
-    setVerifyMessage(null);
-    try {
-      const res = await verifyStudentLookupAction(selectedCourseId, studentRollNo.trim(), studentPin.trim());
-      if (res.success && res.student) {
-        setVerifiedStudent(res.student);
-        setSelectedStudentId(res.student.id);
-        setVerifyMessage(null);
-      } else {
-        setVerifyMessage(res.error || 'Verification failed. Please check your Roll Number and PIN.');
-      }
-    } catch (err: any) {
-      setVerifyMessage(err.message || 'Verification failed.');
-    } finally {
-      setIsVerifying(false);
-    }
   };
 
   // Handle form submission
@@ -366,8 +257,8 @@ export function StudentSubmitForm({
       }
 
       setSuccessData(json);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'An error occurred while submitting.');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'An error occurred while submitting.');
     } finally {
       setIsSubmitting(false);
     }
@@ -404,8 +295,11 @@ export function StudentSubmitForm({
       setChangePinNewPin('');
       setChangePinConfirm('');
       setStudentPin(changePinNewPin);
-    } catch (err: any) {
-      setChangePinMsg({ text: err.message || 'PIN change failed.', type: 'error' });
+    } catch (err: unknown) {
+      setChangePinMsg({
+        text: err instanceof Error ? err.message : 'PIN change failed.',
+        type: 'error',
+      });
     } finally {
       setChangePinBusy(false);
     }
@@ -811,7 +705,7 @@ export function StudentSubmitForm({
                   <button
                     key={opt.id}
                     type="button"
-                    onClick={() => setStatus(opt.id as any)}
+                    onClick={() => setStatus(opt.id as 'covered' | 'partial' | 'revision')}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       isSelected
                         ? opt.activeColor + ' shadow-sm'

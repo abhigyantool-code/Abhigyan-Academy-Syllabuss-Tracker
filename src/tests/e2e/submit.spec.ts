@@ -17,16 +17,17 @@ test.describe('Abhigyan Academy Student Submission Portal', () => {
           await pb.collection('entries').delete(entry.id);
         }
       }
-    } catch (err) {
+    } catch {
       // Ignore if test database is not seeded or unreachable
     }
   });
 
-  test('should render the student submit form with active course tabs', async ({ page }) => {
+  test('should render the student submit form with active course tabs and student dropdown', async ({ page }) => {
     await page.goto('/submit');
     await expect(page.locator('text=ABHIGYAN ACADEMY').first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'NDA' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'CDS' })).toBeVisible();
+    await expect(page.locator('select#student-select')).toBeVisible();
   });
 
   test('should reject submission when class code is incorrect', async ({ page }) => {
@@ -47,6 +48,9 @@ test.describe('Abhigyan Academy Student Submission Portal', () => {
     // Select student from dropdown
     const studentSelect = page.locator('select#student-select');
     await studentSelect.selectOption({ index: 1 });
+
+    // Fill Student PIN
+    await page.locator('input[placeholder="Enter your PIN"]').fill('1234');
 
     // Fill wrong class code
     const classCodeInput = page.locator('input[placeholder="e.g. NDA-942"]');
@@ -79,9 +83,12 @@ test.describe('Abhigyan Academy Student Submission Portal', () => {
     const topicSelect = page.locator('select').nth(2);
     await topicSelect.selectOption({ index: 1 });
 
-    // Select student ABG-2026-007 from dropdown
+    // Select student from dropdown
     const studentSelect = page.locator('select#student-select');
     await studentSelect.selectOption({ index: 1 });
+
+    // Fill Student PIN
+    await page.locator('input[placeholder="Enter your PIN"]').fill('1234');
 
     // Fill valid CDS class code
     const classCodeInput = page.locator('input[placeholder*="NDA-942"]');
@@ -102,6 +109,7 @@ test.describe('Abhigyan Academy Student Submission Portal', () => {
 
     // Try to re-submit the same topic with same student
     await topicSelect.selectOption({ index: 1 });
+    await page.locator('input[placeholder="Enter your PIN"]').fill('1234');
     if (await classCodeInput.isVisible()) {
       await classCodeInput.fill('CDS-318');
     }

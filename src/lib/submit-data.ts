@@ -37,26 +37,45 @@ export interface SubmitStudent {
   courseIds: string[];
 }
 
+export interface SubmitStudentSession {
+  id: string;
+  name: string;
+  rollNo: string;
+  courseId?: string;
+  courseIds?: string[];
+}
+
+export interface SubmitFormDataResult {
+  courses: SubmitCourseData[];
+  teachers: SubmitTeacher[];
+  subjects: SubmitSubject[];
+  topics: SubmitTopic[];
+  students: SubmitStudent[];
+}
+
 export function sanitizeStudentsForSubmit(
-  rawStudents: Array<Record<string, any>>,
-  rawEnrollments: Array<Record<string, any>>
+  rawStudents: Array<Record<string, unknown>>,
+  rawEnrollments: Array<Record<string, unknown>>
 ): SubmitStudent[] {
   const enrollmentMap = new Map<string, Set<string>>();
   for (const en of rawEnrollments) {
-    if (en && en.student && en.course) {
-      if (!enrollmentMap.has(en.student)) {
-        enrollmentMap.set(en.student, new Set());
+    const stuId = typeof en?.student === 'string' ? en.student : '';
+    const courseId = typeof en?.course === 'string' ? en.course : '';
+    if (stuId && courseId) {
+      if (!enrollmentMap.has(stuId)) {
+        enrollmentMap.set(stuId, new Set());
       }
-      enrollmentMap.get(en.student)!.add(en.course);
+      enrollmentMap.get(stuId)!.add(courseId);
     }
   }
 
   return rawStudents
     .filter((s) => s && Boolean(s.active))
     .map((s) => {
-      const courseIds = Array.from(enrollmentMap.get(s.id) || []);
+      const id = String(s.id);
+      const courseIds = Array.from(enrollmentMap.get(id) || []);
       return {
-        id: String(s.id),
+        id,
         name: String(s.name),
         roll_no: String(s.roll_no),
         course_id: courseIds[0] || '',
@@ -68,7 +87,135 @@ export function sanitizeStudentsForSubmit(
     );
 }
 
-let cachedSubmitData: { data: any; expiry: number } | null = null;
+export function getSessionEnrolledCourseIds(
+  students: SubmitStudent[],
+  session?: SubmitStudentSession | null
+): string[] {
+  if (!session) return [];
+  const matchedStu = students.find(
+    (s) =>
+      s.id === session.id ||
+      (Boolean(session.rollNo) && s.roll_no.toUpperCase() === session.rollNo.toUpperCase())
+  );
+  const set = new Set<string>();
+  if (Array.isArray(session.courseIds)) {
+    for (const cid of session.courseIds) {
+      if (cid) set.add(cid);
+    }
+  }
+  if (session.courseId) {
+    set.add(session.courseId);
+  }
+  if (matchedStu) {
+    if (Array.isArray(matchedStu.courseIds)) {
+      for (const cid of matchedStu.courseIds) {
+        if (cid) set.add(cid);
+      }
+    }
+    if (matchedStu.course_id) {
+      set.add(matchedStu.course_id);
+    }
+  }
+  return Array.from(set);
+}
+
+export function filterStudentsForCourse(
+  students: SubmitStudent[],
+  courseId: string,
+  activeStudentSession?: SubmitStudentSession | null
+): SubmitStudent[] {
+  const filtered = students.filter((s) => {
+    if (Array.isArray(s.courseIds)) {
+      return s.courseIds.includes(courseId);
+    }
+    return s.course_id === courseId;
+  });
+
+  if (activeStudentSession) {
+    const sessionCourseIds = getSessionEnrolledCourseIds(students, activeStudentSession);
+    if (
+      sessionCourseIds.includes(courseId) &&
+      !filtered.some((s) => s.id === activeStudentSession.id)
+    ) {
+      filtered.unshift({
+        id: activeStudentSession.id,
+        name: activeStudentSession.name,
+        roll_no: activeStudentSession.rollNo,
+        course_id: courseId,
+        courseIds: sessionCourseIds,
+      });
+    }
+  }
+
+  return filtered;
+}
+
+export function resolveCourseStudentSelection(
+  courses: SubmitCourseData[],
+  students: SubmitStudent[],
+  activeStudentSession?: SubmitStudentSession | null,
+  targetCourseId?: string,
+  currentSelectedStudentId?: string
+): {
+  courseId: string;
+  selectedStudentId: string;
+  studentRollNo: string;
+  verifiedStudent: { id: string; name: string; roll_no: string } | null;
+} {
+  const sessionCourseIds = getSessionEnrolledCourseIds(students, activeStudentSession);
+  const courseId =
+    targetCourseId ||
+    sessionCourseIds.find((cid) => courses.some((c) => c.id === cid)) ||
+    courses[0]?.id ||
+    '';
+
+  const enrolledInCourse = filterStudentsForCourse(students, courseId, activeStudentSession);
+
+  // 1. Check if activeStudentSession is enrolled in courseId
+  if (activeStudentSession && sessionCourseIds.includes(courseId)) {
+    const matched = enrolledInCourse.find(
+      (s) =>
+        s.id === activeStudentSession.id ||
+        (Boolean(activeStudentSession.rollNo) &&
+          s.roll_no.toUpperCase() === activeStudentSession.rollNo.toUpperCase())
+    );
+    const id = matched?.id || activeStudentSession.id;
+    const name = matched?.name || activeStudentSession.name;
+    const rollNo = matched?.roll_no || activeStudentSession.rollNo;
+    return {
+      courseId,
+      selectedStudentId: id,
+      studentRollNo: rollNo,
+      verifiedStudent: { id, name, roll_no: rollNo },
+    };
+  }
+
+  // 2. If a student was manually selected and is also enrolled in the target course, preserve selection
+  if (currentSelectedStudentId) {
+    const matchedCurrent = enrolledInCourse.find((s) => s.id === currentSelectedStudentId);
+    if (matchedCurrent) {
+      return {
+        courseId,
+        selectedStudentId: matchedCurrent.id,
+        studentRollNo: matchedCurrent.roll_no,
+        verifiedStudent: {
+          id: matchedCurrent.id,
+          name: matchedCurrent.name,
+          roll_no: matchedCurrent.roll_no,
+        },
+      };
+    }
+  }
+
+  return {
+    courseId,
+    selectedStudentId: '',
+    studentRollNo: '',
+    verifiedStudent: null,
+  };
+}
+
+let cachedSubmitData: { data: SubmitFormDataResult; expiry: number } | null = null;
 
 export function invalidateSubmitFormDataCache() {
   cachedSubmitData = null;
@@ -109,8 +256,14 @@ export async function getSubmitFormData(forceRefresh = false) {
   const subjectMap = new Map<string, SubmitSubject>();
 
   for (const ts of teacherSubjects) {
-    const teacher = (ts.expand as any)?.teacher;
-    const subject = (ts.expand as any)?.subject;
+    const expand = ts.expand as
+      | {
+          teacher?: { id: string; name: string; active?: boolean };
+          subject?: { id: string; name: string; course: string };
+        }
+      | undefined;
+    const teacher = expand?.teacher;
+    const subject = expand?.subject;
 
     if (teacher && subject && teacher.active) {
       const teacherKey = `${teacher.id}_${subject.course}`;

@@ -5,7 +5,7 @@ import { getSession } from '@/lib/session';
 import { getPbClient } from '@/lib/pb';
 import { getSubmitFormData } from '@/lib/submit-data';
 import { StudentSubmitForm } from '@/components/submit/student-submit-form';
-import { GraduationCap, LayoutDashboard, BookOpen } from 'lucide-react';
+import { LayoutDashboard, BookOpen } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,30 +27,45 @@ export default async function SubmitPage() {
 
   if (session?.role === 'student' && (session.studentId || session.userId)) {
     const sId = session.studentId || session.userId;
-    const cachedStu = formData.students?.find((s: any) => s.id === sId);
+    const cachedStu = formData.students?.find((s) => s.id === sId);
     if (cachedStu) {
+      const stuCourseIds =
+        cachedStu.courseIds || (cachedStu.course_id ? [cachedStu.course_id] : []);
+      const firstActiveCourseId =
+        stuCourseIds.find((cid) => formData.courses.some((c) => c.id === cid)) ||
+        stuCourseIds[0] ||
+        undefined;
       defaultStudentSession = {
         id: cachedStu.id,
         name: cachedStu.name,
         rollNo: cachedStu.roll_no,
-        courseId: cachedStu.courseIds?.[0] || cachedStu.course_id || undefined,
-        courseIds: cachedStu.courseIds || (cachedStu.course_id ? [cachedStu.course_id] : []),
+        courseId: firstActiveCourseId,
+        courseIds: stuCourseIds,
       };
     } else {
       try {
         const pb = await getPbClient();
         const [stu, enrolls] = await Promise.all([
-          pb.collection('students').getOne(sId),
-          pb.collection('enrollments').getFullList({ filter: `student = "${sId}"` }),
+          pb.collection('students').getOne(sId, { fields: 'id,roll_no,name,active' }),
+          pb.collection('enrollments').getFullList({
+            filter: `student = "${sId}"`,
+            fields: 'student,course',
+          }),
         ]);
-        const courseIds = enrolls.map((e) => e.course).filter(Boolean);
-        defaultStudentSession = {
-          id: stu.id,
-          name: stu.name,
-          rollNo: stu.roll_no,
-          courseId: courseIds[0] || undefined,
-          courseIds,
-        };
+        if (stu && stu.active) {
+          const courseIds = enrolls.map((e) => String(e.course)).filter(Boolean);
+          const firstActiveCourseId =
+            courseIds.find((cid) => formData.courses.some((c) => c.id === cid)) ||
+            courseIds[0] ||
+            undefined;
+          defaultStudentSession = {
+            id: stu.id,
+            name: stu.name,
+            rollNo: stu.roll_no,
+            courseId: firstActiveCourseId,
+            courseIds,
+          };
+        }
       } catch {
         // Non-fatal fallback
       }

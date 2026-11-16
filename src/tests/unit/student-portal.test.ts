@@ -13,7 +13,12 @@ import {
   resetRateLimitsForTesting,
 } from '../../lib/rate-limit';
 import { hashPin, verifyPinDual } from '../../lib/pin-hash';
-import { sanitizeStudentsForSubmit } from '../../lib/submit-data';
+import {
+  sanitizeStudentsForSubmit,
+  filterStudentsForCourse,
+  resolveCourseStudentSelection,
+  SubmitCourseData,
+} from '../../lib/submit-data';
 
 describe('BUG-003 & BUG-017: Student Privacy & Dedicated Student Portal Tests', () => {
   beforeEach(() => {
@@ -196,6 +201,120 @@ describe('BUG-003 & BUG-017: Student Privacy & Dedicated Student Portal Tests', 
         assert.equal('pin' in s, false);
         assert.equal('pin_hash' in s, false);
       }
+    });
+
+    it('should exclude un-enrolled active students (courseIds: []) from course dropdowns', () => {
+      const studentsWithUnenrolled = sanitizeStudentsForSubmit(
+        [
+          ...rawStudents,
+          {
+            id: 'stu_unenrolled',
+            roll_no: 'GEN-99',
+            name: 'Unenrolled Student',
+            active: true,
+            pin: '',
+            pin_hash: 'scrypt$secret_hash_99',
+          },
+        ],
+        rawEnrollments
+      );
+
+      const ndaList = filterStudentsForCourse(studentsWithUnenrolled, 'course_nda');
+      const cdsList = filterStudentsForCourse(studentsWithUnenrolled, 'course_cds');
+
+      assert.deepEqual(
+        ndaList.map((s) => s.id),
+        ['stu_002', 'stu_010']
+      );
+      assert.deepEqual(
+        cdsList.map((s) => s.id),
+        ['stu_002']
+      );
+      assert.equal(
+        ndaList.some((s) => s.id === 'stu_unenrolled'),
+        false
+      );
+    });
+
+    it('should preserve pre-selected student across multiple enrolled courses and clear on non-enrolled course', () => {
+      const courses: SubmitCourseData[] = [
+        { id: 'course_nda', name: 'NDA Batch', code: 'NDA', sort_order: 1, require_class_code: false },
+        { id: 'course_cds', name: 'CDS Batch', code: 'CDS', sort_order: 2, require_class_code: false },
+        { id: 'course_afcat', name: 'AFCAT Batch', code: 'AFCAT', sort_order: 3, require_class_code: false },
+      ];
+      const sanitized = sanitizeStudentsForSubmit(rawStudents, rawEnrollments);
+
+      // stu_002 is enrolled in both course_nda and course_cds, but NOT course_afcat
+      const multiCourseSession = {
+        id: 'stu_002',
+        name: 'Mafruza Rahman',
+        rollNo: 'NDA-2',
+      };
+
+      // 1. Initial mount resolves course_nda and pre-selects stu_002 even when courseId wasn't passed on session prop
+      const initial = resolveCourseStudentSelection(courses, sanitized, multiCourseSession);
+      assert.equal(initial.courseId, 'course_nda');
+      assert.equal(initial.selectedStudentId, 'stu_002');
+      assert.equal(initial.studentRollNo, 'NDA-2');
+
+      // 2. Switching to second enrolled course (course_cds) preserves stu_002 selection
+      const onCds = resolveCourseStudentSelection(
+        courses,
+        sanitized,
+        multiCourseSession,
+        'course_cds',
+        initial.selectedStudentId
+      );
+      assert.equal(onCds.courseId, 'course_cds');
+      assert.equal(onCds.selectedStudentId, 'stu_002');
+
+      // 3. Switching to non-enrolled third course (course_afcat) clears student selection
+      const onAfcat = resolveCourseStudentSelection(
+        courses,
+        sanitized,
+        multiCourseSession,
+        'course_afcat',
+        onCds.selectedStudentId
+      );
+      assert.equal(onAfcat.courseId, 'course_afcat');
+      assert.equal(onAfcat.selectedStudentId, '');
+      assert.equal(onAfcat.verifiedStudent, null);
+
+      // 4. Switching back to course_cds restores stu_002 selection
+      const backToCds = resolveCourseStudentSelection(
+        courses,
+        sanitized,
+        multiCourseSession,
+        'course_cds',
+        onAfcat.selectedStudentId
+      );
+      assert.equal(backToCds.selectedStudentId, 'stu_002');
+    });
+
+    it('should select the first active enrolled course when a student has an inactive primary enrollment', () => {
+      const courses: SubmitCourseData[] = [
+        { id: 'course_nda', name: 'NDA Batch', code: 'NDA', sort_order: 1, require_class_code: false },
+        { id: 'course_cds', name: 'CDS Batch', code: 'CDS', sort_order: 2, require_class_code: false },
+      ];
+      const students = sanitizeStudentsForSubmit(
+        [{ id: 'stu_cds', roll_no: 'CDS-1', name: 'Lashram Sadhana Devi', active: true }],
+        [
+          { student: 'stu_cds', course: 'course_archived_old' },
+          { student: 'stu_cds', course: 'course_cds' },
+        ]
+      );
+
+      const session = {
+        id: 'stu_cds',
+        name: 'Lashram Sadhana Devi',
+        rollNo: 'CDS-1',
+        courseId: 'course_archived_old',
+        courseIds: ['course_archived_old', 'course_cds'],
+      };
+
+      const resolved = resolveCourseStudentSelection(courses, students, session);
+      assert.equal(resolved.courseId, 'course_cds');
+      assert.equal(resolved.selectedStudentId, 'stu_cds');
     });
   });
 });
