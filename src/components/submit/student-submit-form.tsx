@@ -9,7 +9,6 @@ import {
   SubmitTopic,
   SubmitStudent,
   SubmitStudentSession,
-  filterStudentsForCourse,
   resolveCourseStudentSelection,
 } from '@/lib/submit-data';
 import {
@@ -20,11 +19,8 @@ import {
   AlertCircle,
   RefreshCw,
   Send,
-  Eye,
-  EyeOff,
-  Settings,
+  ShieldCheck,
 } from 'lucide-react';
-import { changeStudentPinAction } from '@/app/actions/auth-actions';
 
 export type LoggedInStudentSession = SubmitStudentSession;
 
@@ -48,8 +44,19 @@ export function StudentSubmitForm({
   const activeStudentSession = loggedInStudent || defaultStudentSession;
   const { courses, teachers, subjects, topics, students } = initialData;
 
+  // Filter courses strictly to what the student is enrolled in
+  const studentAllowedCourses = useMemo(() => {
+    if (!activeStudentSession) return courses;
+    const enrolledIds =
+      activeStudentSession.courseIds ||
+      (activeStudentSession.courseId ? [activeStudentSession.courseId] : []);
+    if (enrolledIds.length === 0) return courses;
+    const filtered = courses.filter((c) => enrolledIds.includes(c.id));
+    return filtered.length > 0 ? filtered : courses;
+  }, [courses, activeStudentSession]);
+
   const initialSelection = resolveCourseStudentSelection(
-    courses,
+    studentAllowedCourses,
     students,
     activeStudentSession
   );
@@ -58,14 +65,6 @@ export function StudentSubmitForm({
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(initialSelection.selectedStudentId);
-  const [studentRollNo, setStudentRollNo] = useState<string>(initialSelection.studentRollNo);
-  const [verifiedStudent, setVerifiedStudent] = useState<{ id: string; name: string; roll_no: string } | null>(
-    initialSelection.verifiedStudent
-  );
-  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
-  const [studentPin, setStudentPin] = useState<string>('');
-  const [showPin, setShowPin] = useState<boolean>(false);
   const [classCode, setClassCode] = useState<string>('');
   const [status, setStatus] = useState<'covered' | 'partial' | 'revision'>('covered');
   const [remarks, setRemarks] = useState<string>('');
@@ -86,14 +85,6 @@ export function StudentSubmitForm({
     message: string;
   } | null>(null);
 
-  // Change PIN modal state
-  const [showChangePinModal, setShowChangePinModal] = useState(false);
-  const [changePinCurrentPin, setChangePinCurrentPin] = useState('');
-  const [changePinNewPin, setChangePinNewPin] = useState('');
-  const [changePinConfirm, setChangePinConfirm] = useState('');
-  const [changePinMsg, setChangePinMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [changePinBusy, setChangePinBusy] = useState(false);
-
   // Initialize or read device_id cookie on mount
   useEffect(() => {
     function getCookie(name: string) {
@@ -110,8 +101,12 @@ export function StudentSubmitForm({
   }, []);
 
   const currentCourse = useMemo(() => {
-    return courses.find((c) => c.id === selectedCourseId) || courses[0];
-  }, [courses, selectedCourseId]);
+    return (
+      studentAllowedCourses.find((c) => c.id === selectedCourseId) ||
+      studentAllowedCourses[0] ||
+      courses[0]
+    );
+  }, [studentAllowedCourses, selectedCourseId, courses]);
 
   // 1. Cascading Teachers (teachers who teach subjects in this course)
   const availableTeachers = useMemo(() => {
@@ -134,47 +129,12 @@ export function StudentSubmitForm({
       .sort((a, b) => a.seq_no - b.seq_no);
   }, [topics, selectedSubjectId]);
 
-  // 4. Enrolled Students in this course
-  const enrolledStudents = useMemo(() => {
-    return filterStudentsForCourse(students, selectedCourseId, activeStudentSession);
-  }, [students, selectedCourseId, activeStudentSession]);
-
-  const selectedStudentObj = useMemo(() => {
-    return (
-      enrolledStudents.find((s) => s.id === selectedStudentId) ||
-      students.find((s) => s.id === selectedStudentId) ||
-      (activeStudentSession && activeStudentSession.id === selectedStudentId
-        ? {
-            id: activeStudentSession.id,
-            name: activeStudentSession.name,
-            roll_no: activeStudentSession.rollNo,
-            course_id: selectedCourseId,
-            courseIds: activeStudentSession.courseIds || [selectedCourseId],
-          }
-        : undefined)
-    );
-  }, [enrolledStudents, students, selectedStudentId, activeStudentSession, selectedCourseId]);
-
   // Reset dependent fields when course changes
   const handleCourseChange = (courseId: string) => {
     setSelectedCourseId(courseId);
     setSelectedTeacherId('');
     setSelectedSubjectId('');
     setSelectedTopicId('');
-
-    const nextSelection = resolveCourseStudentSelection(
-      courses,
-      students,
-      activeStudentSession,
-      courseId,
-      selectedStudentId
-    );
-    setSelectedStudentId(nextSelection.selectedStudentId);
-    setStudentRollNo(nextSelection.studentRollNo);
-    setVerifiedStudent(nextSelection.verifiedStudent);
-
-    setVerifyMessage(null);
-    setStudentPin('');
     setClassCode('');
     setErrorMessage(null);
     setSuccessData(null);
@@ -213,15 +173,6 @@ export function StudentSubmitForm({
       setErrorMessage('Please select the specific syllabus topic covered.');
       return;
     }
-    const effectiveStudent = selectedStudentId || verifiedStudent?.id || studentRollNo.trim().toUpperCase();
-    if (!effectiveStudent) {
-      setErrorMessage('Please select your student name / roll number.');
-      return;
-    }
-    if (!studentPin.trim() || studentPin.trim().length < 4) {
-      setErrorMessage('Please enter your 4–8 digit Student PIN.');
-      return;
-    }
     if (currentCourse?.require_class_code && !classCode.trim()) {
       setErrorMessage('Please enter the active class code shown on the classroom board.');
       return;
@@ -230,16 +181,18 @@ export function StudentSubmitForm({
     setIsSubmitting(true);
 
     try {
+      // Identity is derived from authenticated server session
+      const effectiveStudent = activeStudentSession?.id || initialSelection.selectedStudentId;
+
       const payload = {
         courseId: selectedCourseId,
         teacherId: selectedTeacherId,
         subjectId: selectedSubjectId,
         topicId: selectedTopicId,
         studentId: effectiveStudent,
-        pin: studentPin.trim(),
         classCode: classCode.trim().toUpperCase(),
         status,
-        remarks: remarks || null,
+        remarks: remarks ? remarks.trim() : null,
         deviceId: deviceId || 'anonymous_mobile_device',
         websiteUrlHp: honeypot, // Honeypot trap
       };
@@ -261,47 +214,6 @@ export function StudentSubmitForm({
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred while submitting.');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // Handle student PIN change
-  const handleChangePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setChangePinMsg(null);
-
-    const studentIdentifier = selectedStudentId || verifiedStudent?.id || studentRollNo.trim().toUpperCase();
-    if (!studentIdentifier) {
-      setChangePinMsg({ text: 'Please select your student name / ID first (Step 4).', type: 'error' });
-      return;
-    }
-    if (!/^\d{4,8}$/.test(changePinNewPin)) {
-      setChangePinMsg({ text: 'New PIN must be 4–8 numeric digits.', type: 'error' });
-      return;
-    }
-    if (changePinNewPin !== changePinConfirm) {
-      setChangePinMsg({ text: 'New PIN and Confirm PIN do not match.', type: 'error' });
-      return;
-    }
-
-    setChangePinBusy(true);
-    try {
-      const res = await changeStudentPinAction(studentIdentifier, changePinCurrentPin, changePinNewPin);
-      if (res && !res.success) {
-        setChangePinMsg({ text: res.error || 'PIN change failed.', type: 'error' });
-        return;
-      }
-      setChangePinMsg({ text: 'PIN changed successfully! Use your new PIN for future logins.', type: 'success' });
-      setChangePinCurrentPin('');
-      setChangePinNewPin('');
-      setChangePinConfirm('');
-      setStudentPin(changePinNewPin);
-    } catch (err: unknown) {
-      setChangePinMsg({
-        text: err instanceof Error ? err.message : 'PIN change failed.',
-        type: 'error',
-      });
-    } finally {
-      setChangePinBusy(false);
     }
   };
 
@@ -357,7 +269,6 @@ export function StudentSubmitForm({
               setSelectedTopicId('');
               setRemarks('');
               setClassCode('');
-              setStudentPin('');
             }}
             className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm py-3 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 active:scale-98"
           >
@@ -379,26 +290,35 @@ export function StudentSubmitForm({
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-6">
-      {/* 1. Course Tabs Ribbon */}
-      <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-1.5 rounded-2xl flex items-center gap-1.5 overflow-x-auto shadow-lg">
-        {courses.map((c) => {
-          const isSelected = c.id === selectedCourseId;
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => handleCourseChange(c.id)}
-              className={`flex-1 min-w-[90px] py-2 px-3 rounded-xl text-xs font-bold transition-all text-center whitespace-nowrap ${
-                isSelected
-                  ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-              }`}
-            >
-              <span>{c.code}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* 1. Course Tabs Ribbon (Locked to enrolled courses) */}
+      {studentAllowedCourses.length > 1 ? (
+        <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-1.5 rounded-2xl flex items-center gap-1.5 overflow-x-auto shadow-lg">
+          {studentAllowedCourses.map((c) => {
+            const isSelected = c.id === selectedCourseId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => handleCourseChange(c.id)}
+                className={`flex-1 min-w-[90px] py-2 px-3 rounded-xl text-xs font-bold transition-all text-center whitespace-nowrap ${
+                  isSelected
+                    ? 'bg-zinc-800 text-white shadow-md ring-1 ring-white/10'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                }`}
+              >
+                <span>{c.code}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bg-zinc-900/60 border border-zinc-800/80 px-4 py-2.5 rounded-2xl flex items-center justify-between text-xs">
+          <span className="text-zinc-400 font-medium">Enrolled Course:</span>
+          <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-lg">
+            {currentCourse?.name} ({currentCourse?.code})
+          </span>
+        </div>
+      )}
 
       {/* Main Student Form Card */}
       <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800/80 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5">
@@ -531,122 +451,47 @@ export function StudentSubmitForm({
             </div>
           </div>
 
-          {/* 4. Student Name / Student ID Dropdown */}
-          <div className="space-y-1.5">
-            <label htmlFor="student-select" className="text-xs font-bold text-zinc-300 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
-                  4
-                </span>
-                Student Name / Student ID
-              </span>
-              <span className="text-[11px] font-normal text-zinc-500">
-                {enrolledStudents.length} enrolled in {currentCourse?.code || 'course'}
-              </span>
-            </label>
-
-            <div className="relative">
-              <select
-                id="student-select"
-                required
-                value={selectedStudentId}
-                onChange={(e) => {
-                  const stuId = e.target.value;
-                  setSelectedStudentId(stuId);
-                  const found = enrolledStudents.find((s) => s.id === stuId);
-                  setStudentRollNo(found ? found.roll_no : '');
-                  setVerifiedStudent(found ? { id: found.id, name: found.name, roll_no: found.roll_no } : null);
-                  setVerifyMessage(null);
-                  setErrorMessage(null);
-                }}
-                className="w-full appearance-none bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium pr-10"
-              >
-                <option value="">-- Select Student Name / Roll No --</option>
-                {enrolledStudents.map((stu) => (
-                  <option key={stu.id} value={stu.id}>
-                    {stu.name} ({stu.roll_no})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-zinc-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-
-            {selectedStudentObj && (
-              <p className="text-[11px] text-emerald-400/90 font-mono flex items-center gap-1.5 pt-0.5">
-                <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                <span>
-                  Selected: <strong className="font-sans text-zinc-200">{selectedStudentObj.name}</strong> ({selectedStudentObj.roll_no})
-                </span>
-              </p>
-            )}
-            {verifyMessage && (
-              <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
-                <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                {verifyMessage}
-              </p>
-            )}
-          </div>
-
-          {/* 5. Student Authentication PIN */}
+          {/* 4. Verified Student Identity Badge (Identity locked to authenticated session) */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
-                  5
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[11px] font-mono font-black">
+                  4
                 </span>
-                Student PIN
+                Verified Student Identity
               </span>
-              <span className="text-[11px] font-normal text-zinc-400 font-mono">
-                4–8 Digits
+              <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Session Locked
               </span>
             </label>
-            <div className="relative">
-              <input
-                type={showPin ? 'text' : 'password'}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={8}
-                required
-                placeholder="Enter your PIN"
-                value={studentPin}
-                onChange={(e) => setStudentPin(e.target.value.replace(/\D/g, ''))}
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm font-mono font-bold text-white tracking-widest placeholder-zinc-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPin(!showPin)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
-                tabIndex={-1}
-                title={showPin ? 'Hide PIN' : 'Show PIN'}
-              >
-                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-[11px] text-zinc-500">
-              Protects your student serial number from proxy submissions by others.
-            </p>
-            {/* Change PIN link */}
-            {(selectedStudentId || studentRollNo.trim()) && (
-              <div className="flex items-center gap-3 mt-1">
-                <button
-                  type="button"
-                  onClick={() => { setShowChangePinModal(true); setChangePinMsg(null); }}
-                  className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
-                >
-                  <Settings className="w-3 h-3" />
-                  Change My PIN
-                </button>
+
+            <div className="bg-zinc-950/80 border border-emerald-500/30 rounded-2xl p-4 space-y-1.5 shadow-inner">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  Authenticated Cadet
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-400">
+                  {activeStudentSession?.rollNo || initialSelection.studentRollNo || 'ENROLLED'}
+                </span>
               </div>
-            )}
+              <div className="text-sm font-black text-white">
+                {activeStudentSession?.name || initialSelection.verifiedStudent?.name || 'Enrolled Student'}
+              </div>
+              <p className="text-[11px] text-zinc-400">
+                Course: <strong className="text-zinc-200">{currentCourse?.name} ({currentCourse?.code})</strong> &bull; Submissions are cryptographically bound to your session.
+              </p>
+            </div>
           </div>
 
-          {/* 6. Class Code (displayed only when require_class_code is true) */}
+          {/* 5. Class Code (displayed only when require_class_code is true) */}
           {currentCourse?.require_class_code && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[11px] font-mono font-black">
-                    6
+                    5
                   </span>
                   Class Code
                 </span>
@@ -672,7 +517,7 @@ export function StudentSubmitForm({
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
               <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-[11px] font-mono font-black">
-                {currentCourse?.require_class_code ? '7' : '6'}
+                {currentCourse?.require_class_code ? '6' : '5'}
               </span>
               Class Status
             </label>
@@ -722,7 +567,7 @@ export function StudentSubmitForm({
             </div>
           </div>
 
-          {/* 7. Remarks (Optional) */}
+          {/* Remarks (Optional) */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-400 flex items-center justify-between">
               <span>Remarks (Optional)</span>
@@ -762,92 +607,6 @@ export function StudentSubmitForm({
       <p className="text-center text-[11px] text-zinc-500 font-mono">
         Anti-misuse duplicate protection enabled &bull; Class date automatically stamped in IST
       </p>
-
-      {/* Change PIN Modal */}
-      {showChangePinModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Settings className="w-4 h-4 text-indigo-400" />
-              Change My PIN
-            </h3>
-            {selectedStudentObj && (
-              <p className="text-xs text-zinc-400">
-                Changing PIN for <strong className="text-zinc-200">{selectedStudentObj.name}</strong> ({selectedStudentObj.roll_no}).
-              </p>
-            )}
-            {changePinMsg && (
-              <div
-                className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between ${
-                  changePinMsg.type === 'success'
-                    ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-                    : 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
-                }`}
-              >
-                <span>{changePinMsg.text}</span>
-                <button onClick={() => setChangePinMsg(null)} className="text-zinc-400 hover:text-white">&times;</button>
-              </div>
-            )}
-            <form onSubmit={handleChangePinSubmit} className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-zinc-400 block mb-1">Current PIN</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  required
-                  maxLength={8}
-                  value={changePinCurrentPin}
-                  onChange={(e) => setChangePinCurrentPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter current PIN"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-400 block mb-1">New PIN (4–8 digits)</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  required
-                  maxLength={8}
-                  value={changePinNewPin}
-                  onChange={(e) => setChangePinNewPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter new PIN"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-400 block mb-1">Confirm New PIN</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  required
-                  maxLength={8}
-                  value={changePinConfirm}
-                  onChange={(e) => setChangePinConfirm(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Confirm new PIN"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white font-mono tracking-widest focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowChangePinModal(false); setChangePinMsg(null); }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  disabled={changePinBusy}
-                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
-                >
-                  {changePinBusy ? 'Saving…' : 'Save New PIN'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

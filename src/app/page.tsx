@@ -66,24 +66,18 @@ export default async function Home() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                 Student Portal
-                <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">/student</span>
+                <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">/student/login</span>
               </h2>
               <p className="text-sm text-slate-400 leading-relaxed">
                 Log daily covered topics, inspect your personal syllabus curriculum, and view verified classroom submission history.
               </p>
             </div>
-            <div className="mt-6 flex flex-wrap items-center gap-3 text-xs font-semibold">
+            <div className="mt-6 flex items-center text-xs font-semibold">
               <Link
-                href="/submit"
-                className="text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                href="/student/login"
+                className="w-full text-center text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 px-4 py-2.5 rounded-xl font-bold transition-all shadow-sm"
               >
-                Log Class (/submit) &rarr;
-              </Link>
-              <Link
-                href="/student"
-                className="text-slate-300 hover:text-white bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                My Dashboard (/student)
+                Access Student Portal (/student/login) &rarr;
               </Link>
             </div>
           </div>
@@ -145,7 +139,7 @@ export default async function Home() {
         <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-            <span>Database: <strong className="text-slate-200">PocketBase (Self-Hosted Cloud)</strong></span>
+            <span>System Status: <strong className="text-slate-200">Academy Cloud Engine Active</strong></span>
           </div>
           <div className="flex items-center gap-6">
             <span>Active Courses: <strong className="text-slate-200">{courseCount}</strong></span>
@@ -156,7 +150,7 @@ export default async function Home() {
       </main>
 
       <footer className="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
-        Abhigyan Academy Syllabus Tracker &bull; Production Release &bull; Built with Next.js App Router, PocketBase, Tailwind & shadcn
+        Abhigyan Academy Syllabus Tracker &bull; Official Learning Governance &amp; Syllabus Tracking System
       </footer>
     </div>
   );

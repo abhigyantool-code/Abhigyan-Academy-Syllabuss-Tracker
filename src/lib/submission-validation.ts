@@ -8,11 +8,12 @@ export const submitEntrySchema = z.object({
   teacherId: z.string().regex(idRegex, 'Please select a faculty member'),
   subjectId: z.string().regex(idRegex, 'Please select a subject'),
   topicId: z.string().regex(idRegex, 'Please select a curriculum topic'),
-  studentId: z.string().min(1, 'Please enter your student Roll Number or select your profile'),
+  studentId: z.string().min(1, 'Please enter your student Roll Number or select your profile').optional(),
   pin: z
     .string()
     .min(4, 'Student PIN must be at least 4 digits')
-    .max(8, 'Student PIN cannot exceed 8 digits'),
+    .max(8, 'Student PIN cannot exceed 8 digits')
+    .optional(),
   classCode: z.string().optional().default(''),
   status: z.enum(['covered', 'partial', 'revision']),
   remarks: z

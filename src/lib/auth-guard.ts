@@ -41,7 +41,7 @@ export function evaluateAccess(
       if (a === 'faculty' && (session.role === 'faculty' || session.role === 'admin')) return true;
       if (a === 'dashboard' && (session.role === 'faculty' || session.role === 'admin')) return true;
       if (a === 'student' && (session.role === 'student' || session.role === 'admin')) return true;
-      if (a === 'submit') return true;
+      if (a === 'submit' && (session.role === 'student' || session.role === 'admin')) return true;
       return false;
     });
 
@@ -84,8 +84,15 @@ export function evaluateAccess(
     return { allowed: true };
   }
 
-  // 5. Student Submission (/submit): Open entry form, protected by 4-digit PIN + active hours
-  return { allowed: true };
+  // 5. Student Submission (/submit): Accessible to Students and Admin
+  if (area === 'submit') {
+    if (!session || (session.role !== 'student' && session.role !== 'admin')) {
+      return { allowed: false, redirectUrl: '/student/login' };
+    }
+    return { allowed: true };
+  }
+
+  return { allowed: false, redirectUrl: '/login' };
 }
 
 export async function requireAccess(area: AccessArea | AccessArea[]): Promise<AccessResult> {

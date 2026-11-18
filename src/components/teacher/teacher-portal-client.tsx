@@ -175,10 +175,10 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
             <Link
               href="/dashboard"
               title="View Executive Performance Dashboard"
-              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition-colors text-xs flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-600/20 transition-all active:scale-98"
             >
-              <LayoutDashboard className="w-3.5 h-3.5 text-sky-400" />
-              <span className="hidden md:inline">Executive Dashboard</span>
+              <LayoutDashboard className="w-3.5 h-3.5 text-white" />
+              <span>Executive Dashboard</span>
             </Link>
 
             <button
@@ -221,6 +221,15 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
             <p className="text-xs text-zinc-400 mt-1">
               Your session is strictly isolated to your assigned subjects. Students submit topic logs from `/submit`.
             </p>
+            <div className="pt-2">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300 transition-colors"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>View Academy-Wide Syllabus Pacing &amp; Coverage &rarr;</span>
+              </Link>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">

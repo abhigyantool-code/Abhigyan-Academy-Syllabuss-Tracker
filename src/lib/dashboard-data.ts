@@ -23,6 +23,30 @@ export interface OverviewMetrics {
   confirmationThreshold: number;
 }
 
+export interface PacingMetrics {
+  dailyClassesCount: number;
+  weeklyClassesCount: number;
+  monthlyClassesCount: number;
+  pendingTopicsCount: number;
+}
+
+export interface CrossClassComparisonItem {
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  totalTopics: number;
+  coveredTopics: number;
+  pendingTopics: number;
+  coveragePct: number;
+}
+
+export interface AcademyCoverageSummary {
+  totalTopics: number;
+  coveredTopics: number;
+  pendingTopics: number;
+  overallCoveragePct: number;
+}
+
 export interface SubjectProgressItem {
   subject_id: string;
   course_id: string;
@@ -69,18 +93,17 @@ export interface TimelineDataPoint {
   actualCumulative: number;
 }
 
-export interface RecentEntryItem {
+export interface TeachingSessionItem {
   id: string;
-  student_name: string;
-  roll_no: string;
+  session_date: string;
   teacher_name: string;
+  course_name: string;
   subject_name: string;
+  topic_seq?: number;
   topic_name: string;
-  class_date: string;
-  status: 'covered' | 'partial' | 'revision';
-  remarks: string | null;
-  review_status: 'auto' | 'pending' | 'approved' | 'rejected' | 'CLEARED' | 'VIOLATION' | 'FLAGGED';
-  flags: string[];
+  session_type: string;
+  status: string;
+  remarks?: string | null;
   created_at: string;
 }
 
@@ -109,6 +132,12 @@ export async function getDashboardData(courseId?: string) {
   const today = getTodayIST();
   const pb = await getPbClient();
 
+  // Calculate 7-day bounds and month prefix for pacing metrics
+  const now = new Date();
+  const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = sevenDaysAgoDate.toISOString().split('T')[0];
+  const currentMonthPrefix = today.substring(0, 7); // YYYY-MM
+
   // 1. Settings & Enrollment Count
   const [settingsList, enrollments, pendingEntriesRes] = await Promise.all([
     pb.collection('course_settings').getFullList({ filter: `course = "${cId}"` }),
@@ -122,7 +151,7 @@ export async function getDashboardData(courseId?: string) {
   const configuredThreshold = settingsList[0]?.confirmation_threshold || 5;
   const effectiveThreshold = computeEffectiveThreshold(configuredThreshold, enrolledCount);
 
-  // 2. Fetch Subjects & Topics for this course (BUG-036: Include teaching_records)
+  // 2. Fetch Subjects & Topics for selected course
   const teachingRecordsPromise = pb
     .collection('teaching_records')
     .getFullList({
@@ -130,7 +159,26 @@ export async function getDashboardData(courseId?: string) {
     })
     .catch(() => [] as any[]);
 
-  const [subjects, topics, courseEntries, teacherSubjects, courseTeachingRecords] = await Promise.all([
+  // All teaching records across the academy for pacing and cross-course analytics
+  const allTeachingRecordsPromise = pb
+    .collection('teaching_records')
+    .getFullList({
+      filter: `is_voided = false`,
+      expand: 'teacher,course,subject,topic',
+      sort: '-session_date,-created',
+    })
+    .catch(() => [] as any[]);
+
+  // All topics and subjects across the academy for cross-class comparison
+  const [
+    subjects,
+    topics,
+    courseEntries,
+    teacherSubjects,
+    courseTeachingRecords,
+    allTeachingRecords,
+    allCoursesTopics,
+  ] = await Promise.all([
     pb.collection('subjects').getFullList({ filter: `course = "${cId}"`, sort: 'sort_order' }),
     pb.collection('topics').getFullList({
       filter: `subject.course = "${cId}"`,
@@ -144,6 +192,11 @@ export async function getDashboardData(courseId?: string) {
       expand: 'teacher',
     }),
     teachingRecordsPromise,
+    allTeachingRecordsPromise,
+    pb.collection('topics').getFullList({
+      expand: 'subject',
+      fields: 'id,subject,name,seq_no,target_date,expand.subject.course',
+    }).catch(() => [] as any[]),
   ]);
 
   // Subject ID to Name map
@@ -200,7 +253,7 @@ export async function getDashboardData(courseId?: string) {
     }
   }
 
-  // Combine teaching_records (BUG-036: Preserves coverage when entries migrate)
+  // Combine teaching_records (genuine completed teaching records satisfy coverage directly)
   for (const tr of courseTeachingRecords) {
     if (!topicStatsMap.has(tr.topic)) {
       topicStatsMap.set(tr.topic, {
@@ -213,7 +266,7 @@ export async function getDashboardData(courseId?: string) {
     }
     const stat = topicStatsMap.get(tr.topic)!;
     if (tr.status === 'completed' && !tr.is_voided) {
-      stat.approved = true; // Faculty endorsement directly fulfills coverage
+      stat.approved = true;
     }
     if (tr.session_date) {
       if (!stat.firstDate || tr.session_date < stat.firstDate) stat.firstDate = tr.session_date;
@@ -304,17 +357,48 @@ export async function getDashboardData(courseId?: string) {
     }
   );
 
-  // 4. Overview Metrics
+  // 4. Overview Metrics & Pacing for Selected Course
   const totalTopics = topicProgress.length;
   const coveredTopics = topicProgress.filter((t) => t.status === 'covered').length;
   const plannedTopics = topicProgress.filter(
     (t) => t.target_date !== null && t.target_date <= today
   ).length;
   const overdueCount = topicProgress.filter((t) => t.status === 'overdue').length;
+  const pendingTopicsCount = totalTopics - coveredTopics;
 
   const coveragePct = totalTopics > 0 ? Number(((coveredTopics / totalTopics) * 100).toFixed(1)) : 0;
   const plannedPct = totalTopics > 0 ? Number(((plannedTopics / totalTopics) * 100).toFixed(1)) : 0;
   const variancePct = Number((coveragePct - plannedPct).toFixed(1));
+
+  // Pacing calculations (daily, weekly, monthly classes)
+  const dailyClassesSet = new Set<string>();
+  const weeklyClassesSet = new Set<string>();
+  const monthlyClassesSet = new Set<string>();
+
+  for (const tr of courseTeachingRecords) {
+    if (tr.teacher && tr.session_date && tr.status === 'completed' && !tr.is_voided) {
+      const key = `${tr.teacher}_${tr.session_date}_${tr.topic}`;
+      if (tr.session_date === today) dailyClassesSet.add(key);
+      if (tr.session_date >= sevenDaysAgo) weeklyClassesSet.add(key);
+      if (tr.session_date.startsWith(currentMonthPrefix)) monthlyClassesSet.add(key);
+    }
+  }
+
+  for (const ent of courseEntries) {
+    if (ent.teacher && ent.class_date) {
+      const key = `${ent.teacher}_${ent.class_date}_${ent.topic}`;
+      if (ent.class_date === today) dailyClassesSet.add(key);
+      if (ent.class_date >= sevenDaysAgo) weeklyClassesSet.add(key);
+      if (ent.class_date.startsWith(currentMonthPrefix)) monthlyClassesSet.add(key);
+    }
+  }
+
+  const pacingMetrics: PacingMetrics = {
+    dailyClassesCount: dailyClassesSet.size,
+    weeklyClassesCount: weeklyClassesSet.size,
+    monthlyClassesCount: monthlyClassesSet.size,
+    pendingTopicsCount,
+  };
 
   // Distinct classes logged = distinct (teacher, class_date)
   const distinctClasses = new Set<string>();
@@ -343,9 +427,67 @@ export async function getDashboardData(courseId?: string) {
     confirmationThreshold: configuredThreshold,
   };
 
-  // 5. Teacher Scorecard for this course
+  // 5. Cross-Class Comparison & Academy-Wide Summary
+  // Build covered topic set across all courses from teaching records and completed entries
+  const allCoveredTopicIds = new Set<string>();
+  for (const tr of allTeachingRecords) {
+    if (tr.topic && tr.status === 'completed' && !tr.is_voided) {
+      allCoveredTopicIds.add(tr.topic);
+    }
+  }
+
+  // Count topics per course
+  const topicsByCourse = new Map<string, { total: number; covered: number }>();
+  for (const c of courses) {
+    topicsByCourse.set(c.id, { total: 0, covered: 0 });
+  }
+
+  for (const top of allCoursesTopics) {
+    const courseId = (top.expand as any)?.subject?.course;
+    if (courseId && topicsByCourse.has(courseId)) {
+      const stat = topicsByCourse.get(courseId)!;
+      stat.total++;
+      if (allCoveredTopicIds.has(top.id) || (courseId === cId && topicProgress.find((tp) => tp.topic_id === top.id)?.status === 'covered')) {
+        stat.covered++;
+      }
+    }
+  }
+
+  // Ensure current selected course has exact calculated numbers
+  if (topicsByCourse.has(cId)) {
+    topicsByCourse.get(cId)!.total = totalTopics;
+    topicsByCourse.get(cId)!.covered = coveredTopics;
+  }
+
+  let academyTotalTopics = 0;
+  let academyCoveredTopics = 0;
+
+  const crossClassComparison: CrossClassComparisonItem[] = courses.map((c) => {
+    const stat = topicsByCourse.get(c.id) || { total: 0, covered: 0 };
+    academyTotalTopics += stat.total;
+    academyCoveredTopics += stat.covered;
+    const pending = Math.max(0, stat.total - stat.covered);
+    const pct = stat.total > 0 ? Number(((stat.covered / stat.total) * 100).toFixed(1)) : 0;
+    return {
+      courseId: c.id,
+      courseName: c.name,
+      courseCode: c.code,
+      totalTopics: stat.total,
+      coveredTopics: stat.covered,
+      pendingTopics: pending,
+      coveragePct: pct,
+    };
+  });
+
+  const academyCoverage: AcademyCoverageSummary = {
+    totalTopics: academyTotalTopics,
+    coveredTopics: academyCoveredTopics,
+    pendingTopics: Math.max(0, academyTotalTopics - academyCoveredTopics),
+    overallCoveragePct: academyTotalTopics > 0 ? Number(((academyCoveredTopics / academyTotalTopics) * 100).toFixed(1)) : 0,
+  };
+
+  // 6. Teacher Scorecard for this course
   const teachers = await pb.collection('teachers').getFullList({ filter: 'active = true' });
-  const currentMonthPrefix = today.substring(0, 7); // YYYY-MM
 
   const teacherScorecard: TeacherScorecardItem[] = [];
   for (const tea of teachers) {
@@ -434,7 +576,7 @@ export async function getDashboardData(courseId?: string) {
 
   teacherScorecard.sort((a, b) => b.topics_covered - a.topics_covered);
 
-  // 6. Cumulative Planned vs Actual Timeline
+  // 7. Cumulative Planned vs Actual Timeline
   const allDatesSet = new Set<string>();
   topicProgress.forEach((t) => {
     if (t.target_date) allDatesSet.add(t.target_date);
@@ -462,32 +604,31 @@ export async function getDashboardData(courseId?: string) {
     });
   });
 
-  // 7. Recent Entries Feed
-  const recentEntriesRes = await pb.collection('entries').getList(1, 15, {
-    filter: `course = "${cId}"`,
-    sort: '-created',
-    expand: 'student,teacher,subject,topic',
-  });
+  // 8. Genuine Teaching Sessions Activity (Completely Free from Private Student Data)
+  // Queries completed teaching records for this course (or academy-wide if course has few)
+  const courseTeachingSessions = allTeachingRecords.filter(
+    (tr) => tr.course === cId || (tr.expand as any)?.course?.id === cId
+  );
+  const recordsToUse = courseTeachingSessions.length > 0 ? courseTeachingSessions : allTeachingRecords;
 
-  const recentEntries: RecentEntryItem[] = recentEntriesRes.items.map((r) => {
-    const student = (r.expand as any)?.student;
-    const teacher = (r.expand as any)?.teacher;
-    const subject = (r.expand as any)?.subject;
-    const topic = (r.expand as any)?.topic;
+  const teachingSessions: TeachingSessionItem[] = recordsToUse.slice(0, 15).map((tr) => {
+    const teacherObj = (tr.expand as any)?.teacher;
+    const courseObj = (tr.expand as any)?.course;
+    const subjectObj = (tr.expand as any)?.subject;
+    const topicObj = (tr.expand as any)?.topic;
 
     return {
-      id: r.id,
-      student_name: student?.name || 'Unknown',
-      roll_no: student?.roll_no || '',
-      teacher_name: teacher?.name || 'Unknown',
-      subject_name: subject?.name || '',
-      topic_name: topic?.name || '',
-      class_date: r.class_date,
-      status: r.status,
-      remarks: r.remarks || null,
-      review_status: r.review_status,
-      flags: Array.isArray(r.flags) ? r.flags : [],
-      created_at: r.created,
+      id: tr.id,
+      session_date: tr.session_date,
+      teacher_name: teacherObj?.name || 'Faculty Member',
+      course_name: courseObj?.name || selectedCourse.name,
+      subject_name: subjectObj?.name || 'Assigned Subject',
+      topic_seq: topicObj?.seq_no,
+      topic_name: topicObj?.name || 'Lecture Topic',
+      session_type: tr.session_type || 'lecture',
+      status: tr.status || 'completed',
+      remarks: tr.remarks || null,
+      created_at: tr.created || tr.session_date,
     };
   });
 
@@ -495,11 +636,14 @@ export async function getDashboardData(courseId?: string) {
     courses,
     selectedCourse,
     overviewMetrics,
+    pacingMetrics,
+    crossClassComparison,
+    academyCoverage,
     subjectProgress,
     topicProgress,
     teacherScorecard,
     timelineData,
-    recentEntries,
+    teachingSessions,
     today,
   };
 }

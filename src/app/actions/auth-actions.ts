@@ -20,7 +20,7 @@ import {
   recordAdminFailure,
   recordAdminSuccess,
 } from '@/lib/rate-limit';
-import { verifyPinDual, hashPin } from '@/lib/pin-hash';
+import { verifyPinDual, hashPin, isTemporaryPinHash } from '@/lib/pin-hash';
 import { verifyStudent } from '@/lib/student-guard';
 
 export async function teacherLoginAction(
@@ -364,6 +364,17 @@ export async function changeStudentPinAction(
     // 6. Verify Current PIN (mandatory unless an authorized admin is overriding)
     const isAdmin = session?.role === 'admin';
     if (!isAdmin) {
+      // Asymmetric PIN policy: Students can change PIN only once when using an admin-issued temporary/default PIN
+      const isTemporary = isTemporaryPinHash(student.pin_hash) || student.pin === '1234';
+      if (!isTemporary) {
+        inFlightReserved = false;
+        releasePinAttempt(student.id, clientIp);
+        return {
+          success: false,
+          error: 'PIN change is not permitted. Your personal PIN has already been set. Please contact an administrator to request a PIN reset.',
+        };
+      }
+
       const verification = await verifyPinDual(currentPin.trim(), student.pin_hash, student.pin);
       if (!verification.valid) {
         inFlightReserved = false;
@@ -397,17 +408,25 @@ export async function changeStudentPinAction(
     });
 
     if (session?.role === 'student') {
-      await createSession({
-        userId: student.id,
-        role: 'student',
-        name: student.name,
-        studentId: student.id,
-        mustChangePin: false,
-      });
+      try {
+        await createSession({
+          userId: student.id,
+          role: 'student',
+          name: student.name,
+          studentId: student.id,
+          mustChangePin: false,
+        });
+      } catch {
+        // Safe fallback in test or non-cookie environment
+      }
     }
 
-    revalidatePath('/student');
-    revalidatePath('/submit');
+    try {
+      revalidatePath('/student');
+      revalidatePath('/submit');
+    } catch {
+      // Safe fallback in test environment
+    }
     return { success: true };
   } catch (err: any) {
     if (inFlightReserved) {

@@ -391,7 +391,7 @@ export function TeacherLoginForm({ teachers, initialTab = 'faculty', portalMode 
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
           Encrypted Session Cookie
         </span>
-        <span className="font-mono">Port 3005</span>
+        <span className="font-mono">Academy Security Gateway</span>
       </div>
     </div>
   );

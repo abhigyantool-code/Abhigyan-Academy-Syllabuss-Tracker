@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { requireAccess } from '@/lib/auth-guard';
 import { getDashboardData } from '@/lib/dashboard-data';
-import { formatISTDate, formatISTDateTime } from '@/lib/date-utils';
+import { formatISTDate } from '@/lib/date-utils';
 import { logoutAction } from '@/app/actions/auth-actions';
 import { CumulativeChart } from '@/components/dashboard/cumulative-chart';
 import { TopicSheetTable } from '@/components/dashboard/topic-sheet-table';
@@ -12,19 +12,14 @@ import {
   GraduationCap,
   Shield,
   Layers,
-  TrendingUp,
-  AlertTriangle,
-  Clock,
-  CheckCircle2,
-  Users,
   Calendar,
-  Sparkles,
   ArrowUpRight,
   ArrowDownRight,
-  Activity,
-  Flame,
   UserCheck,
   LogOut,
+  Target,
+  BarChart3,
+  BookOpen,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -45,7 +40,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (!data) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center font-sans">
-        <p className="text-sm text-zinc-500">No active courses found. Please seed the database.</p>
+        <p className="text-sm text-zinc-500">No active course records found in academy curriculum.</p>
       </div>
     );
   }
@@ -54,11 +49,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     courses,
     selectedCourse,
     overviewMetrics,
+    pacingMetrics,
+    crossClassComparison,
+    academyCoverage,
     subjectProgress,
     topicProgress,
     teacherScorecard,
     timelineData,
-    recentEntries,
+    teachingSessions,
     today,
   } = data;
 
@@ -81,10 +79,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </h1>
                 <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Live Pacing
+                  Faculty Executive Dashboard
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 font-medium">Defence Exam Coaching Syllabus & Class Tracker</p>
+              <p className="text-xs text-zinc-400 font-medium">Defence Exam Coaching Syllabus &amp; Class Tracker</p>
             </div>
           </div>
 
@@ -100,7 +98,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all border border-zinc-800 hover:border-zinc-700 shadow-sm"
             >
               <GraduationCap className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Student Form</span>
+              <span>Student Portal</span>
             </Link>
 
             {access.user?.role === 'faculty' && (
@@ -135,7 +133,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-        {/* Segmented Course Control Bar (Linear / Raycast Style) */}
+        {/* Segmented Course Control Bar */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center gap-1.5 overflow-x-auto py-2 border-t border-zinc-900">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mr-2 flex items-center gap-1">
             <Layers className="w-3.5 h-3.5" />
@@ -169,7 +167,100 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
-        {/* Course Banner & Actions */}
+        {/* Academy-Wide Coverage Executive Banner */}
+        <div className="bg-gradient-to-r from-zinc-900 via-indigo-950/40 to-zinc-900 border border-indigo-500/30 p-6 rounded-3xl shadow-2xl relative overflow-hidden">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-1.5 max-w-xl">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono uppercase bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <Target className="w-3 h-3 text-indigo-400" />
+                  Academy-Wide Curriculum Matrix
+                </span>
+                <span className="text-xs font-mono text-zinc-400">
+                  {courses.length} Active Batches
+                </span>
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">
+                Overall Academy Syllabus Coverage: <span className="text-indigo-400 font-mono">{academyCoverage.overallCoveragePct}%</span>
+              </h2>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                Calculated across all batches using authenticated faculty teaching sessions and verified classroom completions. Zero private student data exposed.
+              </p>
+            </div>
+
+            {/* Quick Metrics Badge Ribbon */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto">
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 text-center">
+                <span className="text-[10px] uppercase font-mono text-zinc-400 block font-semibold">Total Topics</span>
+                <span className="text-lg font-black text-white font-mono">{academyCoverage.totalTopics}</span>
+              </div>
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 text-center">
+                <span className="text-[10px] uppercase font-mono text-emerald-400 block font-semibold">Covered</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{academyCoverage.coveredTopics}</span>
+              </div>
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 text-center">
+                <span className="text-[10px] uppercase font-mono text-amber-400 block font-semibold">Pending</span>
+                <span className="text-lg font-black text-amber-400 font-mono">{academyCoverage.pendingTopics}</span>
+              </div>
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 text-center">
+                <span className="text-[10px] uppercase font-mono text-sky-400 block font-semibold">Overall Pace</span>
+                <span className="text-lg font-black text-sky-400 font-mono">{academyCoverage.overallCoveragePct}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Cross-Class Batch Comparison Cards */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4 text-indigo-400" />
+              Cross-Class Batch Comparison
+            </h3>
+            <span className="text-[11px] font-mono text-zinc-500">Live Pacing Across All Courses</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {crossClassComparison.map((item) => {
+              const isSelected = item.courseId === selectedCourse.id;
+              return (
+                <Link
+                  key={item.courseId}
+                  href={`/dashboard?course=${item.courseId}`}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isSelected
+                      ? 'bg-zinc-900 border-indigo-500 shadow-lg ring-1 ring-indigo-500/20'
+                      : 'bg-zinc-900/60 border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">
+                      {item.courseCode}
+                    </span>
+                    <span className="text-sm font-black font-mono text-white">
+                      {item.coveragePct}%
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-zinc-200 mt-2 truncate">
+                    {item.courseName}
+                  </h4>
+                  <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden mt-2 border border-zinc-800/80">
+                    <div
+                      style={{ width: `${item.coveragePct}%` }}
+                      className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono mt-2">
+                    <span>{item.coveredTopics}/{item.totalTopics} Covered</span>
+                    <span className="text-amber-400">{item.pendingTopics} Pending</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Selected Course Context Banner & Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-zinc-900/90 to-zinc-900/50 border border-zinc-800/80 p-5 rounded-2xl shadow-xl">
           <div>
             <div className="flex items-center gap-3">
@@ -181,7 +272,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </span>
             </div>
             <p className="text-xs text-zinc-400 mt-1">
-              Required student confirmations: <strong className="text-zinc-200">{overviewMetrics.confirmationThreshold} distinct students</strong> &bull; Schedule comparison in IST
+              Teaching schedule &amp; syllabus verification metrics in IST &bull; Minimum student confirmation threshold: <strong className="text-zinc-200">{overviewMetrics.confirmationThreshold}</strong>
             </p>
           </div>
 
@@ -206,71 +297,83 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-        {/* 1. Modern KPI Cards Ribbon */}
+        {/* Daily, Weekly, Monthly Pacing & Course Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-          {/* Card 1: Actual Covered */}
-          <div className="relative overflow-hidden bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between group hover:border-emerald-500/40 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                Syllabus Covered
-              </span>
-              <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+          {/* Card 1: Today's Classes */}
+          <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+              Classes Today
+            </span>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-emerald-400 font-mono tracking-tight">
+                {pacingMetrics.dailyClassesCount}
               </div>
+              <p className="text-[10px] text-zinc-400 mt-1">Conducted on {today}</p>
             </div>
-            <div className="mt-4">
+          </div>
+
+          {/* Card 2: Weekly Classes */}
+          <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+              Past 7 Days
+            </span>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-indigo-400 font-mono tracking-tight">
+                {pacingMetrics.weeklyClassesCount}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-1">Weekly lecture pace</p>
+            </div>
+          </div>
+
+          {/* Card 3: Monthly Classes */}
+          <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+              This Month
+            </span>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-sky-400 font-mono tracking-tight">
+                {pacingMetrics.monthlyClassesCount}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-1">Monthly total classes</p>
+            </div>
+          </div>
+
+          {/* Card 4: Syllabus Covered % */}
+          <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+              Batch Completion
+            </span>
+            <div className="mt-3">
               <div className="text-3xl font-black text-emerald-400 font-mono tracking-tight">
                 {overviewMetrics.coveragePct}%
               </div>
-              <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden mt-2 border border-zinc-800/60">
-                <div
-                  style={{ width: `${overviewMetrics.coveragePct}%` }}
-                  className="bg-emerald-400 h-full rounded-full"
-                />
-              </div>
-              <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
-                {overviewMetrics.coveredTopics} of {overviewMetrics.totalTopics} topics
+              <p className="text-[10px] text-zinc-400 mt-1 font-mono">
+                {overviewMetrics.coveredTopics}/{overviewMetrics.totalTopics} covered
               </p>
             </div>
           </div>
 
-          {/* Card 2: Planned Target */}
-          <div className="relative overflow-hidden bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between group hover:border-indigo-500/40 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                Planned Target
-              </span>
-              <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-                <Clock className="w-3.5 h-3.5" />
+          {/* Card 5: Pending Topics */}
+          <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+              Pending Topics
+            </span>
+            <div className="mt-3">
+              <div className="text-3xl font-black text-amber-400 font-mono tracking-tight">
+                {pacingMetrics.pendingTopicsCount}
               </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-3xl font-black text-indigo-400 font-mono tracking-tight">
-                {overviewMetrics.plannedPct}%
-              </div>
-              <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden mt-2 border border-zinc-800/60">
-                <div
-                  style={{ width: `${overviewMetrics.plannedPct}%` }}
-                  className="bg-indigo-400 h-full rounded-full"
-                />
-              </div>
-              <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
-                {overviewMetrics.plannedTopics} target by today
+              <p className="text-[10px] text-zinc-400 mt-1 font-mono">
+                Remaining in batch
               </p>
             </div>
           </div>
 
-          {/* Card 3: Schedule Variance */}
-          <div className="relative overflow-hidden bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between group hover:border-zinc-700 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                Schedule Variance
-              </span>
-              <div className="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center">
-                <Activity className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-4">
+          {/* Card 6: Schedule Variance */}
+          <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+              Schedule Variance
+            </span>
+            <div className="mt-3">
               <div
                 className={`text-3xl font-black font-mono tracking-tight flex items-center gap-1 ${
                   isAhead ? 'text-emerald-400' : 'text-amber-400'
@@ -286,88 +389,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </>
                 )}
               </div>
-              <p className="text-[11px] text-zinc-400 mt-2 font-medium">
-                {isAhead ? 'Pacing ahead of target' : 'Behind planned schedule'}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 4: Overdue Topics */}
-          <div className="relative overflow-hidden bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between group hover:border-rose-500/40 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                Overdue Topics
-              </span>
-              <div className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                <AlertTriangle className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-3xl font-black text-rose-400 font-mono tracking-tight">
-                {overviewMetrics.overdueCount}
-              </div>
-              <p className="text-[11px] text-zinc-400 mt-2">
-                Passed target date, not covered
-              </p>
-            </div>
-          </div>
-
-          {/* Card 5: Review Queue */}
-          <div className="relative overflow-hidden bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between group hover:border-amber-500/40 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                Review Queue
-              </span>
-              <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <Flame className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-3xl font-black text-amber-400 font-mono tracking-tight">
-                {overviewMetrics.pendingReviewCount}
-              </div>
-              <p className="text-[11px] text-zinc-400 mt-2">
-                {overviewMetrics.pendingReviewCount > 0 ? (
-                  <Link href="/admin" className="text-amber-400 hover:underline font-semibold">
-                    Review in Admin &rarr;
-                  </Link>
-                ) : (
-                  'All submissions clear'
-                )}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 6: Enrolled Students */}
-          <div className="relative overflow-hidden bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-4 rounded-2xl flex flex-col justify-between group hover:border-zinc-700 transition-all shadow-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                Students Active
-              </span>
-              <div className="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-300 flex items-center justify-center">
-                <Users className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-3xl font-black text-zinc-100 font-mono tracking-tight">
-                {overviewMetrics.enrolledStudents}
-              </div>
-              <p className="text-[11px] text-zinc-500 mt-2 font-mono">
-                {overviewMetrics.totalClassesLogged} class sessions logged
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {isAhead ? 'Pacing ahead of target' : 'Behind target schedule'}
               </p>
             </div>
           </div>
         </div>
 
-        {/* 2. Dual Visualizations: Subject Progress & Cumulative Trajectory */}
+        {/* Dual Visualizations: Subject Progress & Cumulative Trajectory */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Subject Progress Bars (5 cols) */}
+          {/* Subject Progress Bars */}
           <div className="lg:col-span-5 bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
             <div>
               <div className="flex items-center justify-between mb-5 pb-3 border-b border-zinc-800">
                 <div>
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                    Subject Pacing & Completion
+                    Subject Pacing &amp; Completion
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5">Planned schedule vs actual coverage</p>
                 </div>
@@ -401,13 +438,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
                       {/* Dual Bar */}
                       <div className="h-3 w-full bg-zinc-950 rounded-full overflow-hidden flex relative border border-zinc-800/80">
-                        {/* Target line indicator */}
                         <div
                           style={{ left: `${Math.min(sub.planned_pct, 100)}%` }}
                           className="absolute top-0 bottom-0 w-1 bg-indigo-400 z-10 shadow-sm shadow-indigo-400/50"
                           title={`Target Line: ${sub.planned_pct}%`}
                         />
-                        {/* Actual progress */}
                         <div
                           style={{ width: `${Math.min(sub.actual_pct, 100)}%` }}
                           className="h-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-400 rounded-full transition-all duration-700"
@@ -436,7 +471,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
-          {/* Cumulative Trajectory Chart (7 cols) */}
+          {/* Cumulative Trajectory Chart */}
           <div className="lg:col-span-7 bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 flex flex-col justify-between shadow-xl">
             <div className="flex items-center justify-between mb-3 pb-3 border-b border-zinc-800">
               <div>
@@ -459,12 +494,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-        {/* 3. Faculty Pacing & Scorecard Sheet */}
+        {/* Faculty Pacing & Scorecard Sheet */}
         <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                Faculty Pacing & Performance Scorecard
+                Faculty Pacing &amp; Performance Scorecard
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
                 Teacher pacing evaluation against curriculum target dates
@@ -533,7 +568,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-        {/* 4. Master Topic Progress Matrix */}
+        {/* Master Topic Progress Matrix */}
         <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
             <div>
@@ -555,24 +590,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           />
         </div>
 
-        {/* 5. Recent Activity Ledger */}
+        {/* Genuine Faculty Teaching Sessions Activity (Zero Student Privacy Leaks) */}
         <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                Recent Class Submissions Activity
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-emerald-400" />
+                Verified Teaching Sessions Activity
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Live stream of verified student class entries with anti-misuse flags
+                Official faculty lecture endorsements and verified classroom sessions
               </p>
             </div>
-            <a
-              href={`/api/export?type=entries&courseId=${selectedCourse.id}`}
-              download
-              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-mono"
-            >
-              Full Entry Log CSV &rarr;
-            </a>
+            <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+              {teachingSessions.length} Recorded Sessions
+            </span>
           </div>
 
           <div className="border border-zinc-800/80 rounded-xl overflow-hidden bg-zinc-950/60">
@@ -580,71 +612,46 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-zinc-900/90 border-b border-zinc-800 text-zinc-400 font-semibold uppercase tracking-wider text-[10.5px]">
                   <tr>
-                    <th className="py-2.5 px-3 border-r border-zinc-800/60">Class Date</th>
-                    <th className="py-2.5 px-3 border-r border-zinc-800/60">Student</th>
-                    <th className="py-2.5 px-3 border-r border-zinc-800/60">Faculty</th>
-                    <th className="py-2.5 px-4 border-r border-zinc-800/60">Subject & Topic</th>
+                    <th className="py-2.5 px-3 border-r border-zinc-800/60">Session Date</th>
+                    <th className="py-2.5 px-3 border-r border-zinc-800/60">Faculty Member</th>
+                    <th className="py-2.5 px-3 border-r border-zinc-800/60">Batch &amp; Subject</th>
+                    <th className="py-2.5 px-4 border-r border-zinc-800/60">Topic Covered</th>
                     <th className="py-2.5 px-3 text-center border-r border-zinc-800/60">Status</th>
-                    <th className="py-2.5 px-4 border-r border-zinc-800/60">Remarks / Flags</th>
-                    <th className="py-2.5 px-3 text-right">Logged At (IST)</th>
+                    <th className="py-2.5 px-4">Session Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60 font-sans">
-                  {recentEntries.length === 0 ? (
+                  {teachingSessions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-zinc-500">
-                        No submissions recorded for this course yet.
+                      <td colSpan={6} className="py-6 text-center text-zinc-500">
+                        No faculty teaching sessions recorded yet.
                       </td>
                     </tr>
                   ) : (
-                    recentEntries.map((e) => (
-                      <tr key={e.id} className="hover:bg-zinc-900/50 transition-colors text-zinc-300">
-                        <td className="py-2 px-3 font-mono text-zinc-400 border-r border-zinc-800/60">
-                          {formatISTDate(e.class_date)}
+                    teachingSessions.map((s) => (
+                      <tr key={s.id} className="hover:bg-zinc-900/50 transition-colors text-zinc-300">
+                        <td className="py-2 px-3 font-mono text-zinc-400 border-r border-zinc-800/60 whitespace-nowrap">
+                          {formatISTDate(s.session_date)}
                         </td>
-                        <td className="py-2 px-3 border-r border-zinc-800/60">
-                          <span className="font-semibold text-zinc-100">{e.student_name}</span>
-                          <span className="block font-mono text-[10px] text-zinc-500">
-                            {e.roll_no}
-                          </span>
+                        <td className="py-2 px-3 font-semibold text-zinc-100 border-r border-zinc-800/60 whitespace-nowrap">
+                          {s.teacher_name}
                         </td>
-                        <td className="py-2 px-3 text-zinc-300 border-r border-zinc-800/60">
-                          {e.teacher_name}
+                        <td className="py-2 px-3 border-r border-zinc-800/60 whitespace-nowrap">
+                          <span className="font-semibold text-zinc-200 block">{s.subject_name}</span>
+                          <span className="font-mono text-[10px] text-zinc-500">{s.course_name}</span>
                         </td>
                         <td className="py-2 px-4 border-r border-zinc-800/60">
-                          <span className="font-medium text-zinc-200">{e.topic_name}</span>
-                          <span className="block text-[11px] text-zinc-400">{e.subject_name}</span>
-                        </td>
-                        <td className="py-2 px-3 text-center border-r border-zinc-800/60">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
-                              e.status === 'covered'
-                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-                                : e.status === 'partial'
-                                ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
-                                : 'bg-zinc-800 text-zinc-400'
-                            }`}
-                          >
-                            {e.status}
+                          <span className="font-medium text-zinc-200">
+                            {s.topic_seq ? `#${s.topic_seq} • ` : ''}{s.topic_name}
                           </span>
                         </td>
-                        <td className="py-2 px-4 border-r border-zinc-800/60 text-zinc-400 text-xs">
-                          {e.remarks && <span className="block text-zinc-200 italic">&quot;{e.remarks}&quot;</span>}
-                          {e.flags && e.flags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              {e.flags.map((fl) => (
-                                <span
-                                  key={fl}
-                                  className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded font-mono font-semibold"
-                                >
-                                  {fl}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                        <td className="py-2 px-3 text-center border-r border-zinc-800/60 whitespace-nowrap">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                            {s.status}
+                          </span>
                         </td>
-                        <td className="py-2 px-3 text-right font-mono text-zinc-400 text-[11px]">
-                          {formatISTDateTime(e.created_at)}
+                        <td className="py-2 px-4 text-zinc-400 text-xs italic">
+                          {s.remarks || '—'}
                         </td>
                       </tr>
                     ))
@@ -657,7 +664,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </main>
 
       <footer className="border-t border-zinc-800/80 py-4 text-center text-xs text-zinc-500 font-mono">
-        Abhigyan Academy Syllabus Tracker &bull; Phase 1 Core System &bull; IST Reference: {today}
+        Abhigyan Academy Syllabus Tracker &bull; Faculty Executive Dashboard &bull; Asia/Kolkata Reference
       </footer>
     </div>
   );

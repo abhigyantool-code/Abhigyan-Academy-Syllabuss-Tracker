@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { requireAccess } from '@/lib/auth-guard';
 import { getPbClient } from '@/lib/pb';
 import { logoutAction } from '@/app/actions/auth-actions';
@@ -15,7 +16,7 @@ import {
   Users,
   ExternalLink,
 } from 'lucide-react';
-import { StudentPinModal } from '@/components/student/student-pin-modal';
+import { StudentBlockingPinChange } from '@/components/student/student-blocking-pin-change';
 
 export const dynamic = 'force-dynamic';
 
@@ -255,6 +256,16 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
     );
   }
 
+  // Mandatory PIN Change Guard: Render focused blocking PIN rotation screen
+  // The syllabus dashboard is NEVER rendered until the student rotates their temporary PIN
+  if (mustChangePin) {
+    const studentRecord = await pb.collection('students').getOne(targetStudentId!).catch(() => null);
+    if (!studentRecord) {
+      redirect('/student/login');
+    }
+    return <StudentBlockingPinChange studentName={studentRecord.name} rollNo={studentRecord.roll_no} />;
+  }
+
   // Fetch student, enrollments, and entries
   const [student, enrollments, entries] = await Promise.all([
     pb.collection('students').getOne(targetStudentId!).catch(() => null),
@@ -393,7 +404,10 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
 
           <div className="flex items-center gap-2">
             {!isAdmin ? (
-              <StudentPinModal rollNo={student.roll_no} mustChangePin={mustChangePin} />
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl font-bold">
+                <Shield className="w-3.5 h-3.5" />
+                <span>{student.roll_no}</span>
+              </span>
             ) : (
               <Link
                 href="/student"

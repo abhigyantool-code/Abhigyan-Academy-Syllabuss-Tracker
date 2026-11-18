@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { requireAccess } from '@/lib/auth-guard';
 import { getSession } from '@/lib/session';
 import { getPbClient } from '@/lib/pb';
@@ -10,7 +11,11 @@ import { LayoutDashboard, BookOpen } from 'lucide-react';
 export const dynamic = 'force-dynamic';
 
 export default async function SubmitPage() {
-  await requireAccess('submit');
+  const access = await requireAccess('submit');
+
+  if (access.user?.role === 'student' && access.user?.mustChangePin) {
+    redirect('/student?mustChangePin=true');
+  }
 
   const [formData, session] = await Promise.all([
     getSubmitFormData(),

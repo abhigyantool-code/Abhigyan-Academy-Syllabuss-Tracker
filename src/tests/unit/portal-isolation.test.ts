@@ -50,6 +50,17 @@ describe('Portal Separation & Role Isolation Tests', () => {
       assert.strictEqual(result.allowed, false);
       assert.strictEqual(result.redirectUrl, '/teacher/login');
     });
+
+    it('should allow authenticated student to access submission portal (/submit)', () => {
+      const result = evaluateAccess('submit', studentSession);
+      assert.strictEqual(result.allowed, true);
+    });
+
+    it('should redirect unauthenticated access to /submit to /student/login', () => {
+      const result = evaluateAccess('submit', null);
+      assert.strictEqual(result.allowed, false);
+      assert.strictEqual(result.redirectUrl, '/student/login');
+    });
   });
 
   describe('2. Teacher Portal Isolation', () => {
@@ -71,6 +82,12 @@ describe('Portal Separation & Role Isolation Tests', () => {
 
     it('should block teacher from accessing Student Portal (/student) and redirect to /student/login', () => {
       const result = evaluateAccess('student', facultySession);
+      assert.strictEqual(result.allowed, false);
+      assert.strictEqual(result.redirectUrl, '/student/login');
+    });
+
+    it('should block teacher from accessing student submission form (/submit) and redirect to /student/login', () => {
+      const result = evaluateAccess('submit', facultySession);
       assert.strictEqual(result.allowed, false);
       assert.strictEqual(result.redirectUrl, '/student/login');
     });

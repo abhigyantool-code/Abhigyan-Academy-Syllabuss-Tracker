@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPbClient } from '@/lib/pb';
 import { getTodayIST, checkAcademyHours } from '@/lib/date-utils';
-import { verifyStudent } from '@/lib/student-guard';
 import { submitEntrySchema, analyzeMisuseFlags } from '@/lib/submission-validation';
 import { getClientIp } from '@/lib/rate-limit';
+import { getSession } from '@/lib/session';
+import { verifyPinDual } from '@/lib/pin-hash';
 
 // In-memory sliding window rate limiter: max 120 submissions per IP per minute (supports 75+ students on shared school NAT Wi-Fi; bounded to prevent OOM, BUG-041)
 const ipRateLimits = new Map<string, { count: number; resetAt: number }>();
@@ -59,7 +60,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: hoursCheck.reason }, { status: 400 });
     }
 
-    // 2. Zod Validation
+    // 2. Session Authentication & Anti-Spoofing Guard
+    const session = await getSession();
+    if (!session || (session.role !== 'student' && session.role !== 'admin')) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Valid student session required to submit class records.' },
+        { status: 401 }
+      );
+    }
+
+    if (session.role === 'student' && session.mustChangePin) {
+      return NextResponse.json(
+        { error: 'Mandatory PIN change required: Please update your temporary PIN before submitting class records.' },
+        { status: 403 }
+      );
+    }
+
+    // 3. Zod Validation
     const parseResult = submitEntrySchema.safeParse(body);
     if (!parseResult.success) {
       const firstError =
@@ -71,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     const input = parseResult.data;
 
-    // 3. Honeypot check
+    // 4. Honeypot check
     if (input.websiteUrlHp && input.websiteUrlHp.trim().length > 0) {
       return NextResponse.json(
         {
@@ -84,14 +101,86 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Server-enforced IST Date
+    // 5. Server-enforced IST Date & PocketBase client
     const classDate = getTodayIST();
     const pb = await getPbClient();
 
-    // 5. Anti-Proxy Device Check (Prevent 1 phone submitting for many students within 24h)
+    // 6. Identity Resolution & Anti-Spoofing Verification
+    let resolvedStudentId: string;
+    let studentRecord: any;
+
+    if (session.role === 'student') {
+      const sessionStudentId = session.studentId || session.userId;
+      try {
+        studentRecord = await pb.collection('students').getOne(sessionStudentId);
+      } catch {
+        return NextResponse.json({ error: 'Student profile not found in academy records.' }, { status: 404 });
+      }
+
+      // Reject spoofing: if client submitted a studentId/roll_no, it MUST match the authenticated session
+      if (input.studentId && input.studentId.trim() !== '') {
+        const claimed = input.studentId.trim().toUpperCase();
+        const matchesId = claimed === sessionStudentId.toUpperCase();
+        const matchesRoll = claimed === (studentRecord.roll_no || '').toUpperCase();
+        if (!matchesId && !matchesRoll) {
+          return NextResponse.json(
+            { error: 'Forbidden: Identity mismatch. Submissions must match the authenticated student session.' },
+            { status: 403 }
+          );
+        }
+      }
+
+      resolvedStudentId = studentRecord.id;
+    } else {
+      // Admin session submission
+      if (!input.studentId || input.studentId.trim() === '') {
+        return NextResponse.json({ error: 'studentId is required for admin submission.' }, { status: 400 });
+      }
+      try {
+        studentRecord = await pb.collection('students').getOne(input.studentId.trim());
+      } catch {
+        try {
+          const cleanRoll = input.studentId.trim().toUpperCase();
+          studentRecord = await pb.collection('students').getFirstListItem(`roll_no = "${cleanRoll}"`);
+        } catch {
+          return NextResponse.json({ error: 'Student record not found in academy records.' }, { status: 404 });
+        }
+      }
+      resolvedStudentId = studentRecord.id;
+    }
+
+    if (!studentRecord.active) {
+      return NextResponse.json(
+        { error: `Student account for ${studentRecord.name} (${studentRecord.roll_no}) is inactive. Please contact administration.` },
+        { status: 403 }
+      );
+    }
+
+    // Verify course enrollment
+    try {
+      await pb.collection('enrollments').getFirstListItem(`student = "${resolvedStudentId}" && course = "${input.courseId}"`);
+    } catch {
+      return NextResponse.json(
+        { error: `Student ${studentRecord.name} (${studentRecord.roll_no}) is not enrolled in the selected course.` },
+        { status: 400 }
+      );
+    }
+
+    // Optional PIN verification if explicitly provided
+    if (input.pin && input.pin.trim().length > 0) {
+      const verification = await verifyPinDual(input.pin.trim(), studentRecord.pin_hash, studentRecord.pin);
+      if (!verification.valid) {
+        return NextResponse.json(
+          { error: 'Incorrect 4-digit Student PIN. Please check your credentials.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 7. Anti-Proxy Device Check (Prevent 1 phone submitting for many students within 24h)
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace('T', ' ');
     const deviceEntries = await pb.collection('entries').getFullList({
-      filter: `device_id = "${input.deviceId}" && student != "${input.studentId}" && created >= "${twentyFourHoursAgo}"`,
+      filter: `device_id = "${input.deviceId}" && student != "${resolvedStudentId}" && created >= "${twentyFourHoursAgo}"`,
       fields: 'student',
     });
 
@@ -158,12 +247,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 8. Student Verification & PIN Check (active, enrolled & 4-digit PIN)
-    const studentCheck = await verifyStudent(input.studentId, input.courseId, input.pin, clientIp);
-    if (!studentCheck.valid || !studentCheck.student) {
-      return NextResponse.json({ error: studentCheck.error || 'Student authentication failed.' }, { status: 400 });
-    }
-    const resolvedStudentId = studentCheck.student.id;
 
     // 9. Relational Verification: Teacher assigned to Subject
     try {
