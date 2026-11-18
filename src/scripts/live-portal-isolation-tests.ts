@@ -1,4 +1,5 @@
 import { getPbClient } from '../lib/pb';
+import { hashPin } from '../lib/pin-hash';
 
 const PROD_URL = process.env.PROD_URL || 'https://syllabus360.abhigyanintelligence.cloud';
 
@@ -54,32 +55,50 @@ async function testPortals() {
   assertCheck('Student Login Route (/student/login) returns HTTP 200', studentLoginRes.status === 200);
 
   const studentHtml = await studentLoginRes.text();
-  assertCheck('Student Login page includes Student Roll Number field', studentHtml.includes('Student Roll Number'));
-  assertCheck('Student Login page includes Student 4-Digit PIN field', studentHtml.includes('Student 4-Digit PIN'));
+  assertCheck('Student Login page includes Student Profile / Roll Number selection', studentHtml.includes('Student Profile / Roll Number') || studentHtml.includes('Choose your name'));
+  assertCheck('Student Login page includes Student PIN field', studentHtml.includes('Student PIN') || studentHtml.includes('student-pin-input'));
   assertCheck('Student Login page contains NO teacher names in roster', !studentHtml.includes('Captain Vikram Batra') && !studentHtml.includes('Major Somnath Sharma'));
-  assertCheck('Student Login page passes empty teachers list (teachers: [])', studentHtml.includes('teachers\\":[]') && studentHtml.includes('portalMode\\":\\"student\\"'));
+  assertCheck('Student Login page does not leak pin or pin_hash in props', !studentHtml.includes('pin_hash') && !studentHtml.includes('"pin":'));
   assertCheck('Student Login page contains NO Director/Admin login tab', !studentHtml.includes('Director Master Password'));
 
-  // Authenticate genuine student (NDA-01 / 1234)
-  const studentAuthRes = await fetch(`${PROD_URL}/student/login`, {
-    method: 'POST',
-    headers: {
-      'Next-Action': studentActionId,
-      'Content-Type': 'application/json',
-      'Accept': 'text/x-component',
-    },
-    body: JSON.stringify(['NDA-01', '1234']),
+  // Create temporary dedicated test student for isolation testing
+  const testStudentPin = '5829';
+  const testStudentHash = await hashPin(testStudentPin);
+  const testRoll = 'TEST-ISO-' + Date.now().toString().slice(-4);
+  const testStudent = await pb.collection('students').create({
+    name: 'Portal Isolation Test Student',
+    roll_no: testRoll,
+    active: true,
+    pin: '',
+    pin_hash: testStudentHash,
   });
 
-  const studentCookieHeader = studentAuthRes.headers.get('set-cookie');
-  assertCheck('Student login creates genuine session cookie', Boolean(studentCookieHeader && studentCookieHeader.includes('abg_auth_session=')));
-  const studentCookie = (studentCookieHeader || '').split(';')[0];
+  let studentCookie = '';
+  try {
+    const studentAuthRes = await fetch(`${PROD_URL}/student/login`, {
+      method: 'POST',
+      headers: {
+        'Next-Action': studentActionId,
+        'Content-Type': 'application/json',
+        'Accept': 'text/x-component',
+      },
+      body: JSON.stringify([testRoll, testStudentPin]),
+    });
 
-  const studentDashRes = await fetch(`${PROD_URL}/student`, {
-    headers: { Cookie: studentCookie },
-    redirect: 'manual',
-  });
-  assertCheck('Authenticated student can access /student dashboard (HTTP 200)', studentDashRes.status === 200);
+    const studentCookieHeader = studentAuthRes.headers.get('set-cookie');
+    assertCheck('Student login creates genuine session cookie', Boolean(studentCookieHeader && studentCookieHeader.includes('abg_auth_session=')));
+    studentCookie = (studentCookieHeader || '').split(';')[0];
+
+    const studentDashRes = await fetch(`${PROD_URL}/student`, {
+      headers: { Cookie: studentCookie },
+      redirect: 'manual',
+    });
+    assertCheck('Authenticated student can access /student dashboard (HTTP 200)', studentDashRes.status === 200);
+  } finally {
+    try {
+      await pb.collection('students').delete(testStudent.id);
+    } catch {}
+  }
 
   // -------------------------------------------------------------
   // Requirement 2: Teacher Independent Login & Dashboard
