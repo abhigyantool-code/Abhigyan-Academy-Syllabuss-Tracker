@@ -34,11 +34,11 @@ export default function NotFound() {
         {/* Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href="/student/login"
+            href="/"
             className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors shadow"
           >
             <Home className="w-4 h-4" />
-            Go to Student Portal
+            Go to Homepage
           </Link>
           <Link
             href="/login"

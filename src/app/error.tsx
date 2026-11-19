@@ -58,11 +58,11 @@ export default function Error({
             Try Again
           </button>
           <Link
-            href="/student/login"
+            href="/"
             className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors border border-slate-700"
           >
             <Home className="w-4 h-4" />
-            Go to Student Portal
+            Return to Homepage
           </Link>
         </div>
 

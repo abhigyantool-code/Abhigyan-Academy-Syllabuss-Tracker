@@ -262,11 +262,24 @@ describe('Portal Separation & Role Isolation Tests', () => {
       assert.strictEqual(headerSource.includes('Student Portal'), false, 'brand-header.tsx must not have Student Portal button');
       assert.strictEqual(headerSource.includes('title="Student Daily Verification Portal"'), false, 'brand-header.tsx must not have Student Daily Verification Portal title');
       assert.strictEqual(headerSource.includes('href="/submit"'), false, 'brand-header.tsx must not link to /submit');
+      assert.strictEqual(headerSource.includes('href="/student"'), false, 'brand-header.tsx must not link to /student');
     });
 
-    it('should ensure teacher portal client does not leak student submit route in welcome text', () => {
+    it('should ensure teacher portal client does not leak student submit route or student portal links', () => {
       const teacherClientSource = fs.readFileSync(path.resolve(__dirname, '../../components/teacher/teacher-portal-client.tsx'), 'utf8');
       assert.strictEqual(teacherClientSource.includes('Students submit topic logs from `/submit`'), false, 'teacher-portal-client.tsx must not reference student /submit in welcome banner');
+      assert.strictEqual(teacherClientSource.includes('Student Portal'), false, 'teacher-portal-client.tsx must not contain Student Portal');
+      assert.strictEqual(teacherClientSource.includes('href="/submit"'), false, 'teacher-portal-client.tsx must not link to /submit');
+    });
+
+    it('should ensure error and not-found pages link to neutral homepage rather than role-specific portal', () => {
+      const notFoundSource = fs.readFileSync(path.resolve(__dirname, '../../app/not-found.tsx'), 'utf8');
+      assert.strictEqual(notFoundSource.includes('Go to Student Portal'), false, 'not-found.tsx must not have Go to Student Portal');
+      assert.strictEqual(notFoundSource.includes('href="/"'), true, 'not-found.tsx must link to homepage /');
+
+      const errorSource = fs.readFileSync(path.resolve(__dirname, '../../app/error.tsx'), 'utf8');
+      assert.strictEqual(errorSource.includes('Go to Student Portal'), false, 'error.tsx must not have Go to Student Portal');
+      assert.strictEqual(errorSource.includes('href="/"'), true, 'error.tsx must link to homepage /');
     });
   });
 });
