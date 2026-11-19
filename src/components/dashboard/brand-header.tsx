@@ -53,7 +53,7 @@ export function BrandHeader({
             title="Faculty Workspace"
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Faculty</span>
+            <span className="hidden md:inline">My Workspace</span>
           </Link>
         )}
 

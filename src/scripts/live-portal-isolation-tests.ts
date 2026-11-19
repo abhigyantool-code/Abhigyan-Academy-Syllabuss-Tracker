@@ -94,6 +94,13 @@ async function testPortals() {
       redirect: 'manual',
     });
     assertCheck('Authenticated student can access /student dashboard (HTTP 200)', studentDashRes.status === 200);
+
+    const studentSubmitRes = await fetch(`${PROD_URL}/submit`, {
+      headers: { Cookie: studentCookie },
+      redirect: 'manual',
+    });
+    const studentSubmitHtml = await studentSubmitRes.text();
+    assertCheck('Student Submit header contains NO Faculty Dashboard button', !studentSubmitHtml.includes('Faculty Dashboard') && !studentSubmitHtml.includes('href="/dashboard"'));
   } finally {
     try {
       await pb.collection('students').delete(testStudent.id);
@@ -153,6 +160,7 @@ async function testPortals() {
 
   const execDashHtml = await execDashRes.text();
   assertCheck('Executive Dashboard renders "My Workspace" button for teacher session', execDashHtml.includes('My Workspace') && execDashHtml.includes('/teacher'));
+  assertCheck('Executive Dashboard contains NO Student Portal or student submit link', !execDashHtml.includes('href="/submit"') && !execDashHtml.includes('Student Daily Verification Portal'));
 
   // -------------------------------------------------------------
   // Requirement 4: Admin Independent Login & Governance Access
