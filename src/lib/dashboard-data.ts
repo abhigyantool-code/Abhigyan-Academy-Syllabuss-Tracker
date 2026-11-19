@@ -107,6 +107,33 @@ export interface TeachingSessionItem {
   created_at: string;
 }
 
+export function isTestCourse(c: { code?: string; name?: string }): boolean {
+  const code = (c.code || '').toUpperCase();
+  const name = (c.name || '').toUpperCase();
+  return (
+    code === 'TEST_COURSE' ||
+    code.startsWith('TEST_') ||
+    code.startsWith('BOT_') ||
+    code === 'SANDBOX' ||
+    name.startsWith('ZZ_TEST') ||
+    name.startsWith('BOT /') ||
+    name.startsWith('TEST /') ||
+    name.startsWith('TESTING SANDBOX')
+  );
+}
+
+export function isTestAccount(name?: string, rollOrPhone?: string): boolean {
+  const n = (name || '').toUpperCase();
+  const r = (rollOrPhone || '').toUpperCase();
+  return (
+    n.startsWith('ZZ_TEST') ||
+    n.startsWith('BOT') ||
+    n.includes('TEST/BOT') ||
+    r.startsWith('BOT') ||
+    r.startsWith('TEST')
+  );
+}
+
 export async function getActiveCourses(): Promise<DashboardCourse[]> {
   const pb = await getPbClient();
   const list = await pb.collection('courses').getFullList({
@@ -462,7 +489,10 @@ export async function getDashboardData(courseId?: string) {
   let academyTotalTopics = 0;
   let academyCoveredTopics = 0;
 
-  const crossClassComparison: CrossClassComparisonItem[] = courses.map((c) => {
+  // Genuine academic courses only for academy-wide metrics and cross-class comparison
+  const genuineCourses = courses.filter((c) => !isTestCourse(c));
+
+  const crossClassComparison: CrossClassComparisonItem[] = genuineCourses.map((c) => {
     const stat = topicsByCourse.get(c.id) || { total: 0, covered: 0 };
     academyTotalTopics += stat.total;
     academyCoveredTopics += stat.covered;
@@ -491,6 +521,9 @@ export async function getDashboardData(courseId?: string) {
 
   const teacherScorecard: TeacherScorecardItem[] = [];
   for (const tea of teachers) {
+    if (!isTestCourse(selectedCourse) && isTestAccount(tea.name, tea.phone)) {
+      continue;
+    }
     const teaEntries = courseEntries.filter((e) => e.teacher === tea.id);
     const teaTeachingRecs = courseTeachingRecords.filter((t) => t.teacher === tea.id && t.status === 'completed' && !t.is_voided);
     if (teaEntries.length === 0 && teaTeachingRecs.length === 0) continue;

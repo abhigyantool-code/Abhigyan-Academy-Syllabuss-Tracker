@@ -1102,3 +1102,60 @@ export async function voidTeachingRecordAction(recordId: string, voidReason: str
   return { success: true, record: updated };
 }
 
+/**
+ * Deletes ONLY bot-owned test records (entries and teaching_records created by BOT accounts).
+ * Strictly guards genuine student and teacher records: NEVER touches any record from genuine accounts.
+ */
+export async function purgeBotTestRecordsAction() {
+  await requireAccess('admin');
+  const pb = await getPbClient();
+
+  // 1. Identify bot student and teacher accounts
+  const [botStudents, botTeachers] = await Promise.all([
+    pb.collection('students').getFullList({
+      filter: 'roll_no ~ "BOT" || name ~ "ZZ_TEST"',
+    }),
+    pb.collection('teachers').getFullList({
+      filter: 'name ~ "ZZ_TEST" || phone ~ "BOT"',
+    }),
+  ]);
+
+  const botStudentIds = new Set(botStudents.map((s) => s.id));
+  const botTeacherIds = new Set(botTeachers.map((t) => t.id));
+
+  // 2. Fetch and delete bot-owned student entries
+  const allEntries = await pb.collection('entries').getFullList();
+  const botEntries = allEntries.filter(
+    (e) => botStudentIds.has(e.student) || botTeacherIds.has(e.teacher)
+  );
+
+  let deletedEntriesCount = 0;
+  for (const ent of botEntries) {
+    await pb.collection('entries').delete(ent.id);
+    deletedEntriesCount++;
+  }
+
+  // 3. Fetch and delete bot-owned teaching records
+  const allTeachingRecords = await pb.collection('teaching_records').getFullList();
+  const botTRs = allTeachingRecords.filter((tr) => botTeacherIds.has(tr.teacher));
+
+  let deletedTRCount = 0;
+  for (const tr of botTRs) {
+    await pb.collection('teaching_records').delete(tr.id);
+    deletedTRCount++;
+  }
+
+  await logAudit({
+    action: 'PURGE_BOT_TEST_RECORDS',
+    entity: 'test_automation',
+    after: { deletedEntriesCount, deletedTRCount },
+  });
+
+  revalidatePath('/admin');
+  revalidatePath('/dashboard');
+  revalidatePath('/teacher');
+  revalidatePath('/student');
+
+  return { success: true, deletedEntriesCount, deletedTRCount };
+}
+

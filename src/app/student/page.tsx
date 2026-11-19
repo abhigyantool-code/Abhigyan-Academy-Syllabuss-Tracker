@@ -63,9 +63,18 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
       studentEntriesCount.set(entry.student, (studentEntriesCount.get(entry.student) || 0) + 1);
     }
 
-    const totalStudents = allStudents.length;
-    const totalEntries = allEntries.length;
-    const totalApproved = allEntries.filter(
+    const isTestStudent = (s: any) => {
+      const roll = (s?.roll_no || '').toUpperCase();
+      const name = (s?.name || '').toUpperCase();
+      return roll.startsWith('BOT') || roll.startsWith('TEST') || name.startsWith('ZZ_TEST') || name.startsWith('BOT');
+    };
+    const testStudentSet = new Set(allStudents.filter(isTestStudent).map((s) => s.id));
+    const genuineStudents = allStudents.filter((s) => !isTestStudent(s));
+    const genuineEntries = allEntries.filter((e) => !testStudentSet.has(e.student));
+
+    const totalStudents = genuineStudents.length;
+    const totalEntries = genuineEntries.length;
+    const totalApproved = genuineEntries.filter(
       (e) => e.status === 'covered' && (e.review_status === 'auto' || e.review_status === 'approved' || e.review_status === 'CLEARED')
     ).length;
 
@@ -210,6 +219,11 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
                       <tr key={st.id} className="hover:bg-zinc-800/30 transition-colors">
                         <td className="py-3.5 px-4 font-mono font-bold text-amber-400 whitespace-nowrap">
                           {st.roll_no}
+                          {isTestStudent(st) && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              TEST/BOT
+                            </span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-white whitespace-nowrap">
                           {st.name}

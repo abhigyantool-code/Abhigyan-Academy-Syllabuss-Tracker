@@ -217,3 +217,44 @@ In the event of an unforeseen production anomaly, follow these steps to instantl
 3. **Flawless Verification:** 251 out of 251 tests across 4 independent test suites passed with zero failures.
 4. **Complete Record Preservation:** All 75 students, 8 faculty members, and 13 historical entries remain 100% intact.
 5. **Verified Live Deployment:** Running on Coolify with 100% healthy uptime and active database connectivity.
+
+---
+
+## 8. Dedicated Student & Teacher BOT Test Accounts
+
+### 8.1 Purpose & Isolation Architecture
+To enable administrative end-to-end manual verification without impacting genuine academy records or metrics, two dedicated permanent BOT accounts were provisioned in an isolated testing sandbox.
+
+- **Student BOT Account:**
+  - **Name:** `ZZ_TEST_STUDENT`
+  - **Roll Number:** `BOT-STU-001`
+  - **Account Badge:** `TEST/BOT`
+  - **Assigned Course:** `BOT / Testing Sandbox` (`TEST_COURSE`)
+  - **Assigned Subject:** `Sandbox Subject`
+  - **Assigned Topics:** `Sandbox Topic 1`, `Sandbox Topic 2`
+  - **Status:** Active, primed with temporary random PIN forcing mandatory first-login PIN rotation.
+
+- **Teacher BOT Account:**
+  - **Name:** `ZZ_TEST_TEACHER`
+  - **Phone / Identifier:** `BOT-TEA-001`
+  - **Account Badge:** `TEST/BOT`
+  - **Assigned Subject:** `Sandbox Subject`
+  - **Permissions:** Full Teacher Portal access, Mark Taught endorsements, repeatable PIN rotation, Faculty Executive Dashboard view.
+  - **Status:** Active, primed with temporary random PIN forcing mandatory first-login PIN rotation.
+
+### 8.2 Zero Data Pollution & Invariant Audit
+1. **Genuine Records Integrity:**
+   - Genuine Students: Exactly 75 records (100% preserved, hashes identical).
+   - Genuine Teachers: Exactly 8 records (100% preserved, hashes identical).
+   - Genuine Submissions: Exactly 13 records (100% preserved).
+2. **Curriculum & Executive Metrics Isolation:**
+   - Test Course `TEST_COURSE` is filtered out from Academy-wide coverage calculations and Cross-Class comparisons.
+   - Total Academy Topics strictly remains `1,960` topics (5 covered, 0.3% coverage).
+   - Teacher BOT is excluded from genuine course faculty scorecards.
+3. **Admin Management & Purge Capabilities:**
+   - Both BOT accounts feature visual amber `TEST/BOT` badges in the administrative student and faculty rosters.
+   - Administrators can activate, deactivate, and reset PINs for test accounts at will.
+   - Added `purgeBotTestRecordsAction` which cleanly purges test entries and teaching records created during manual testing without touching any genuine student submissions.
+4. **Verification:**
+   - 149/149 automated verification assertions passed cleanly with 0 failures (`src/scripts/setup-and-verify-bot-accounts.ts`).
+   - Secure temporary credentials delivered directly to the administrator in chat session (zero credentials stored in git).

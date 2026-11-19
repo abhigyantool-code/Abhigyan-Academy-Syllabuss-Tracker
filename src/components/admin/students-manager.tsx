@@ -189,7 +189,14 @@ export function StudentsManager({ students, courses }: StudentsManagerProps) {
             {students.map((stu) => (
               <tr key={stu.id} className="hover:bg-slate-900/60 transition-colors text-slate-300">
                 <td className="py-2.5 px-3 font-mono font-bold text-slate-200 border-r border-slate-800/60">
-                  {stu.roll_no}
+                  <div className="flex items-center gap-2">
+                    <span>{stu.roll_no}</span>
+                    {(stu.roll_no.startsWith('BOT') || stu.roll_no.startsWith('TEST') || stu.name.startsWith('ZZ_TEST')) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        TEST/BOT
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-2.5 px-4 font-semibold text-slate-100 border-r border-slate-800/60">
                   {stu.name}

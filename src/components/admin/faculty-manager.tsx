@@ -222,7 +222,14 @@ export function FacultyManager({ teachers, subjects, teachingRecords = [] }: Fac
             {teachers.map((tea) => (
               <tr key={tea.id} className="hover:bg-slate-900/60 transition-colors text-slate-300">
                 <td className="py-2.5 px-4 font-semibold text-slate-100 border-r border-slate-800/60">
-                  {tea.name}
+                  <div className="flex items-center gap-2">
+                    <span>{tea.name}</span>
+                    {(tea.name.startsWith('ZZ_TEST') || tea.name.startsWith('BOT') || (Boolean(tea.phone) && tea.phone!.startsWith('BOT'))) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        TEST/BOT
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-2.5 px-3 font-mono text-slate-400 border-r border-slate-800/60">
                   {tea.phone || '-'}
