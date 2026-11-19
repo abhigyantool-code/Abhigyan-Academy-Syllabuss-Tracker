@@ -7,7 +7,6 @@ import { TeacherDashboardData } from '@/lib/teacher-data';
 import { logoutAction, teacherEndorseTopicAction, updateTeacherPinAction } from '@/app/actions/auth-actions';
 import { voidTeachingRecordAction } from '@/app/actions/admin-actions';
 import {
-  GraduationCap,
   BookOpen,
   CheckCircle2,
   Clock,
@@ -219,7 +218,7 @@ export function TeacherPortalClient({ data, teacherName, mustChangePin = false }
               Welcome, {teacherName}
             </h2>
             <p className="text-xs text-zinc-400 mt-1">
-              Your session is strictly isolated to your assigned subjects. Students submit topic logs from `/submit`.
+              Your session is strictly isolated to your assigned subjects and curriculum topics.
             </p>
             <div className="pt-2">
               <Link

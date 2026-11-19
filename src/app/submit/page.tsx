@@ -6,7 +6,7 @@ import { getSession } from '@/lib/session';
 import { getPbClient } from '@/lib/pb';
 import { getSubmitFormData } from '@/lib/submit-data';
 import { StudentSubmitForm } from '@/components/submit/student-submit-form';
-import { LayoutDashboard, BookOpen } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,13 +101,6 @@ export default async function SubmitPage() {
             >
               <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
               <span>Student Dashboard</span>
-            </Link>
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-3 py-1.5 rounded-xl transition-all font-medium"
-            >
-              <LayoutDashboard className="w-3.5 h-3.5 text-sky-400" />
-              <span className="hidden sm:inline">Faculty Dashboard</span>
             </Link>
           </div>
         </div>

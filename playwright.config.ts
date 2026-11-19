@@ -1,5 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+try {
+  process.loadEnvFile('.env.local');
+} catch {
+  // .env.local may not exist or already loaded
+}
+
 export default defineConfig({
   testDir: './src/tests/e2e',
   timeout: 30000,
@@ -16,7 +22,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome',
+      },
     },
   ],
+  webServer: {
+    command: 'PORT=3005 node --env-file=.env.local .next/standalone/server.js',
+    url: 'http://localhost:3005',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000,
+  },
 });

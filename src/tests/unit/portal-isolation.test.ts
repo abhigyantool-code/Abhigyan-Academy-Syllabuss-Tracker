@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
 import { evaluateAccess } from '../../lib/auth-guard';
 import { signPayload, verifyPayload } from '../../lib/session';
 
@@ -245,6 +247,26 @@ describe('Portal Separation & Role Isolation Tests', () => {
       // Invariant: Self-service entry submission link must only be rendered for student sessions
       const shouldRenderSubmitAction = !isAdmin;
       assert.strictEqual(shouldRenderSubmitAction, false, 'Admin audit mode must withhold self-service submission link');
+    });
+  });
+
+  describe('6. Cross-Portal Navigation Isolation Invariants', () => {
+    it('should ensure student submit view does not contain Faculty Dashboard navigation button', () => {
+      const submitSource = fs.readFileSync(path.resolve(__dirname, '../../app/submit/page.tsx'), 'utf8');
+      assert.strictEqual(submitSource.includes('Faculty Dashboard'), false, 'submit/page.tsx must not have Faculty Dashboard button');
+      assert.strictEqual(submitSource.includes('href="/dashboard"'), false, 'submit/page.tsx must not link to /dashboard');
+    });
+
+    it('should ensure dashboard header does not contain Student Portal or submit link', () => {
+      const headerSource = fs.readFileSync(path.resolve(__dirname, '../../components/dashboard/brand-header.tsx'), 'utf8');
+      assert.strictEqual(headerSource.includes('Student Portal'), false, 'brand-header.tsx must not have Student Portal button');
+      assert.strictEqual(headerSource.includes('title="Student Daily Verification Portal"'), false, 'brand-header.tsx must not have Student Daily Verification Portal title');
+      assert.strictEqual(headerSource.includes('href="/submit"'), false, 'brand-header.tsx must not link to /submit');
+    });
+
+    it('should ensure teacher portal client does not leak student submit route in welcome text', () => {
+      const teacherClientSource = fs.readFileSync(path.resolve(__dirname, '../../components/teacher/teacher-portal-client.tsx'), 'utf8');
+      assert.strictEqual(teacherClientSource.includes('Students submit topic logs from `/submit`'), false, 'teacher-portal-client.tsx must not reference student /submit in welcome banner');
     });
   });
 });
