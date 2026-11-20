@@ -1,8 +1,18 @@
+
+
+
+
 import { cookies } from 'next/headers';
 import crypto from 'node:crypto';
 import { safeCompare } from './rate-limit';
 
-const SESSION_COOKIE_NAME = 'abg_auth_session';
+export const STUDENT_SESSION_COOKIE = 'abg_student_session';
+export const TEACHER_SESSION_COOKIE = 'abg_teacher_session';
+export const ADMIN_SESSION_COOKIE = 'abg_admin_session';
+export const LEGACY_SESSION_COOKIE = 'abg_auth_session';
+
+export type UserRole = 'faculty' | 'admin' | 'student';
+
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 export function getSessionSecret(): string {
@@ -28,6 +38,17 @@ export interface SessionPayload {
   courseId?: string;
   createdAt: number;
   mustChangePin?: boolean;
+}
+
+export function getCookieNameForRole(role: UserRole): string {
+  switch (role) {
+    case 'student':
+      return STUDENT_SESSION_COOKIE;
+    case 'faculty':
+      return TEACHER_SESSION_COOKIE;
+    case 'admin':
+      return ADMIN_SESSION_COOKIE;
+  }
 }
 
 // Signs and encodes payload
@@ -72,7 +93,15 @@ export function verifyPayload(token: string): SessionPayload | null {
   }
 }
 
-export async function createSession(payload: Omit<SessionPayload, 'createdAt'>): Promise<void> {
+/**
+ * Creates an isolated session cookie for the specified role.
+ * Writes to role-specific cookie name (abg_student_session, abg_teacher_session, or abg_admin_session)
+ * without touching or overwriting session cookies of other portals.
+ */
+export async function createSession(
+  payload: Omit<SessionPayload, 'createdAt'>,
+  specificCookieName?: string
+): Promise<void> {
   const fullPayload: SessionPayload = {
     ...payload,
     createdAt: Date.now(),
@@ -80,8 +109,9 @@ export async function createSession(payload: Omit<SessionPayload, 'createdAt'>):
 
   const token = signPayload(fullPayload);
   const cookieStore = await cookies();
+  const cookieName = specificCookieName || getCookieNameForRole(payload.role);
 
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
+  cookieStore.set(cookieName, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_INSECURE !== 'true',
     sameSite: 'lax',
@@ -90,26 +120,111 @@ export async function createSession(payload: Omit<SessionPayload, 'createdAt'>):
   });
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+/**
+ * Retrieves an active session.
+ * If a role is specified ('student', 'faculty', 'admin'), it inspects that role's isolated cookie,
+ * falling back to the legacy cookie if valid and matching.
+ * If role is omitted, it returns the first valid session found (checking admin, faculty, student, legacy).
+ */
+export async function getSession(role?: UserRole): Promise<SessionPayload | null> {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-    if (!token) return null;
-    return verifyPayload(token);
+
+    if (role) {
+      const primaryCookie = getCookieNameForRole(role);
+      const token = cookieStore.get(primaryCookie)?.value;
+      if (token) {
+        const payload = verifyPayload(token);
+        if (payload && payload.role === role) {
+          return payload;
+        }
+      }
+      // Backward compatibility fallback to legacy shared cookie
+      const legacyToken = cookieStore.get(LEGACY_SESSION_COOKIE)?.value;
+      if (legacyToken) {
+        const legacyPayload = verifyPayload(legacyToken);
+        if (legacyPayload && legacyPayload.role === role) {
+          return legacyPayload;
+        }
+      }
+      return null;
+    }
+
+    // Role omitted: probe in order of specificity (admin -> faculty -> student -> legacy)
+    const probeCookies = [ADMIN_SESSION_COOKIE, TEACHER_SESSION_COOKIE, STUDENT_SESSION_COOKIE, LEGACY_SESSION_COOKIE];
+    for (const cName of probeCookies) {
+      const token = cookieStore.get(cName)?.value;
+      if (token) {
+        const payload = verifyPayload(token);
+        if (payload) return payload;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-export async function destroySession(): Promise<void> {
+/**
+ * Role-specific session getters
+ */
+export async function getStudentSession(): Promise<SessionPayload | null> {
+  return getSession('student');
+}
+
+export async function getFacultySession(): Promise<SessionPayload | null> {
+  return getSession('faculty');
+}
+
+export async function getTeacherSession(): Promise<SessionPayload | null> {
+  return getSession('faculty');
+}
+
+export async function getAdminSession(): Promise<SessionPayload | null> {
+  return getSession('admin');
+}
+
+/**
+ * Destroys session for a specific role or destroys legacy session / all sessions if role omitted.
+ */
+export async function destroySession(role?: UserRole): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
-  cookieStore.set(SESSION_COOKIE_NAME, '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_INSECURE !== 'true',
-    sameSite: 'lax',
-    maxAge: 0,
-    expires: new Date(0),
-    path: '/',
-  });
+  const cookiesToClear = role
+    ? [getCookieNameForRole(role)]
+    : [STUDENT_SESSION_COOKIE, TEACHER_SESSION_COOKIE, ADMIN_SESSION_COOKIE, LEGACY_SESSION_COOKIE];
+
+  for (const cName of cookiesToClear) {
+    cookieStore.delete(cName);
+    cookieStore.set(cName, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_INSECURE !== 'true',
+      sameSite: 'lax',
+      maxAge: 0,
+      expires: new Date(0),
+      path: '/',
+    });
+  }
+}
+
+export async function destroyStudentSession(): Promise<void> {
+  return destroySession('student');
+}
+
+export async function destroyFacultySession(): Promise<void> {
+  return destroySession('faculty');
+}
+
+export async function destroyTeacherSession(): Promise<void> {
+  return destroySession('faculty');
+}
+
+export async function destroyAdminSession(): Promise<void> {
+  return destroySession('admin');
+}
+
+/**
+ * Universally destroys all active portal sessions simultaneously.
+ */
+export async function destroyAllSessions(): Promise<void> {
+  return destroySession();
 }

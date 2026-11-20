@@ -24,7 +24,7 @@ function createAuthCookie() {
   const token = `${data}.${signature}`;
 
   return {
-    name: 'abg_auth_session',
+    name: 'abg_admin_session',
     value: token,
     url: 'http://localhost:3005',
     httpOnly: true,

@@ -1,7 +1,20 @@
 'use server';
 
 import { getPbClient } from '@/lib/pb';
-import { createSession, destroySession, getSession } from '@/lib/session';
+import {
+  createSession,
+  destroySession,
+  destroyStudentSession,
+  destroyFacultySession,
+  destroyTeacherSession,
+  destroyAdminSession,
+  destroyAllSessions,
+  getSession,
+  getStudentSession,
+  getFacultySession,
+  getTeacherSession,
+  getAdminSession,
+} from '@/lib/session';
 import { logAudit } from '@/lib/audit';
 import { getTodayIST } from '@/lib/date-utils';
 import { revalidatePath } from 'next/cache';
@@ -177,30 +190,112 @@ export async function adminLoginAction(password: string): Promise<{ success: boo
   }
 }
 
-export async function logoutAction() {
-  const session = await getSession();
-  const role = session?.role;
+export async function logoutStudentAction() {
+  const session = await getStudentSession();
   if (session) {
     await logAudit({
       action: 'LOGOUT',
-      entity: session.role,
+      entity: 'student',
       entityId: session.userId,
     });
   }
-  await destroySession();
-  if (role === 'student') {
-    redirect('/student/login');
-  } else if (role === 'admin') {
-    redirect('/admin/login');
-  } else if (role === 'faculty') {
-    redirect('/teacher/login');
-  } else {
-    redirect('/login');
+  await destroyStudentSession();
+  redirect('/student/login');
+}
+
+export async function logoutTeacherAction() {
+  const session = await getFacultySession();
+  if (session) {
+    await logAudit({
+      action: 'LOGOUT',
+      entity: 'faculty',
+      entityId: session.userId,
+    });
   }
+  await destroyTeacherSession();
+  redirect('/teacher/login');
+}
+export const logoutFacultyAction = logoutTeacherAction;
+
+export async function logoutAdminAction() {
+  const session = await getAdminSession();
+  if (session) {
+    await logAudit({
+      action: 'LOGOUT',
+      entity: 'admin',
+      entityId: session.userId,
+    });
+  }
+  await destroyAdminSession();
+  redirect('/admin/login');
+}
+
+export async function logoutAllAction() {
+  await destroyAllSessions();
+  redirect('/login');
+}
+
+export async function logoutAction(roleOrFormData?: unknown) {
+  let role: string | undefined;
+  if (typeof roleOrFormData === 'string') {
+    role = roleOrFormData;
+  } else if (roleOrFormData && typeof (roleOrFormData as any).get === 'function') {
+    const formRole = (roleOrFormData as any).get('role');
+    if (typeof formRole === 'string') {
+      role = formRole;
+    }
+  }
+
+  if (role === 'student') {
+    return logoutStudentAction();
+  }
+  if (role === 'faculty') {
+    return logoutTeacherAction();
+  }
+  if (role === 'admin') {
+    return logoutAdminAction();
+  }
+
+  // Context-aware lookup via referer header
+  try {
+    const headerList = await headers();
+    const referer = headerList.get('referer') || '';
+    if (referer.includes('/student')) {
+      return logoutStudentAction();
+    }
+    if (referer.includes('/admin')) {
+      return logoutAdminAction();
+    }
+    if (referer.includes('/teacher')) {
+      return logoutTeacherAction();
+    }
+    if (referer.includes('/dashboard')) {
+      const facultySess = await getFacultySession();
+      if (facultySess) return logoutTeacherAction();
+      const adminSess = await getAdminSession();
+      if (adminSess) return logoutAdminAction();
+    }
+  } catch {}
+
+  // If only one portal session exists, log out from that specific session
+  const [studentSess, facultySess, adminSess] = await Promise.all([
+    getStudentSession(),
+    getFacultySession(),
+    getAdminSession(),
+  ]);
+  const activeCount = (studentSess ? 1 : 0) + (facultySess ? 1 : 0) + (adminSess ? 1 : 0);
+  if (activeCount === 1) {
+    if (studentSess) return logoutStudentAction();
+    if (facultySess) return logoutTeacherAction();
+    if (adminSess) return logoutAdminAction();
+  }
+
+  await destroyAllSessions();
+  redirect('/login');
 }
 
 export async function teacherEndorseTopicAction(topicId: string, subjectId: string, courseId: string, remarks?: string) {
-  const session = await getSession();
+  const session = await getFacultySession();
   if (!session || session.role !== 'faculty' || !session.teacherId) {
     throw new Error('Unauthorized. Please log in as faculty.');
   }
@@ -334,7 +429,7 @@ export async function changeStudentPinAction(
     inFlightReserved = true;
 
     // 5. Authorization & Session Role Checks
-    const session = await getSession();
+    const session = (await getStudentSession()) || (await getAdminSession());
 
     if (session) {
       // Faculty are prohibited from modifying student PINs
@@ -440,7 +535,7 @@ export async function changeStudentPinAction(
 export const changeStudentPin = changeStudentPinAction;
 
 export async function updateTeacherPinAction(oldPin: string, newPin: string) {
-  const session = await getSession();
+  const session = await getFacultySession();
   if (!session || session.role !== 'faculty' || !session.teacherId) {
     throw new Error('Unauthorized. Faculty session required.');
   }

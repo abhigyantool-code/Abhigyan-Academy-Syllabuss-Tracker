@@ -1,4 +1,10 @@
-import { getSession } from './session';
+import {
+  getSession,
+  getStudentSession,
+  getFacultySession,
+  getAdminSession,
+  SessionPayload,
+} from './session';
 import { redirect } from 'next/navigation';
 
 export type AccessArea = 'admin' | 'dashboard' | 'submit' | 'faculty' | 'student';
@@ -96,7 +102,45 @@ export function evaluateAccess(
 }
 
 export async function requireAccess(area: AccessArea | AccessArea[]): Promise<AccessResult> {
-  const session = await getSession();
+  let session: SessionPayload | null = null;
+
+  if (Array.isArray(area)) {
+    // Array of allowed areas: check corresponding role sessions
+    if (area.includes('student') || area.includes('submit')) {
+      session = await getStudentSession();
+    }
+    if (!session && (area.includes('faculty') || area.includes('dashboard'))) {
+      session = await getFacultySession();
+    }
+    if (!session && area.includes('admin')) {
+      session = await getAdminSession();
+    }
+    if (!session) {
+      session = await getSession();
+    }
+  } else if (area === 'admin') {
+    session = await getAdminSession();
+  } else if (area === 'faculty') {
+    session = await getFacultySession();
+    if (!session) {
+      session = await getAdminSession();
+    }
+  } else if (area === 'dashboard') {
+    // Shared route: accessible to both faculty and admin
+    session = await getFacultySession();
+    if (!session) {
+      session = await getAdminSession();
+    }
+  } else if (area === 'student' || area === 'submit') {
+    session = await getStudentSession();
+    if (!session) {
+      // Admin is authorized to access /student in audit oversight mode
+      session = await getAdminSession();
+    }
+  } else {
+    session = await getSession();
+  }
+
   const evaluation = evaluateAccess(area, session);
 
   if (!evaluation.allowed) {
