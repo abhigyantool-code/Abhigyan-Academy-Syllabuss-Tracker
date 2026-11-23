@@ -86,7 +86,7 @@ async function testPortals() {
     });
 
     const studentCookieHeader = studentAuthRes.headers.get('set-cookie');
-    assertCheck('Student login creates genuine session cookie', Boolean(studentCookieHeader && studentCookieHeader.includes('abg_auth_session=')));
+    assertCheck('Student login creates genuine session cookie', Boolean(studentCookieHeader && (studentCookieHeader.includes('abg_student_session=') || studentCookieHeader.includes('abg_auth_session='))));
     studentCookie = (studentCookieHeader || '').split(';')[0];
 
     const studentDashRes = await fetch(`${PROD_URL}/student`, {
@@ -136,7 +136,7 @@ async function testPortals() {
   });
 
   const teacherCookieHeader = teacherAuthRes.headers.get('set-cookie');
-  assertCheck('Teacher login creates genuine session cookie', Boolean(teacherCookieHeader && teacherCookieHeader.includes('abg_auth_session=')));
+  assertCheck('Teacher login creates genuine session cookie', Boolean(teacherCookieHeader && (teacherCookieHeader.includes('abg_teacher_session=') || teacherCookieHeader.includes('abg_auth_session='))));
   const teacherCookie = (teacherCookieHeader || '').split(';')[0];
 
   const teacherDashRes = await fetch(`${PROD_URL}/teacher`, {
@@ -187,7 +187,7 @@ async function testPortals() {
   });
 
   const adminCookieHeader = adminAuthRes.headers.get('set-cookie');
-  assertCheck('Admin login creates genuine session cookie', Boolean(adminCookieHeader && adminCookieHeader.includes('abg_auth_session=')));
+  assertCheck('Admin login creates genuine session cookie', Boolean(adminCookieHeader && (adminCookieHeader.includes('abg_admin_session=') || adminCookieHeader.includes('abg_auth_session='))));
   const adminCookie = (adminCookieHeader || '').split(';')[0];
 
   const adminToAdminRes = await fetch(`${PROD_URL}/admin`, {
@@ -261,6 +261,38 @@ async function testPortals() {
 
   const unauthExport = await fetch(`${PROD_URL}/api/export?type=entries`, { redirect: 'manual' });
   assertCheck('Unauthenticated /api/export is blocked (HTTP 307 -> /teacher/login)', unauthExport.status === 307 && (unauthExport.headers.get('location') || '').includes('/teacher/login'));
+
+  // -------------------------------------------------------------
+  // Requirement 7: Simultaneous Multi-Portal Sessions in Same Browser Profile
+  // -------------------------------------------------------------
+  console.log('\n--- REQUIREMENT 7: SIMULTANEOUS MULTI-PORTAL SESSIONS IN SAME BROWSER ---');
+  if (studentCookie && teacherCookie && adminCookie) {
+    const combinedAllCookies = `${studentCookie}; ${teacherCookie}; ${adminCookie}`;
+
+    const multiStudentRes = await fetch(`${PROD_URL}/student`, {
+      headers: { Cookie: combinedAllCookies },
+      redirect: 'manual',
+    });
+    assertCheck('Simultaneous multi-cookie request can access /student (HTTP 200)', multiStudentRes.status === 200);
+
+    const multiTeacherRes = await fetch(`${PROD_URL}/teacher`, {
+      headers: { Cookie: combinedAllCookies },
+      redirect: 'manual',
+    });
+    assertCheck('Simultaneous multi-cookie request can access /teacher (HTTP 200)', multiTeacherRes.status === 200);
+
+    const multiAdminRes = await fetch(`${PROD_URL}/admin`, {
+      headers: { Cookie: combinedAllCookies },
+      redirect: 'manual',
+    });
+    assertCheck('Simultaneous multi-cookie request can access /admin (HTTP 200)', multiAdminRes.status === 200);
+
+    const multiDashRes = await fetch(`${PROD_URL}/dashboard`, {
+      headers: { Cookie: combinedAllCookies },
+      redirect: 'manual',
+    });
+    assertCheck('Simultaneous multi-cookie request can access /dashboard (HTTP 200)', multiDashRes.status === 200);
+  }
 
   // -------------------------------------------------------------
   // Data Integrity Verification: 100% Intact Genuine Submissions

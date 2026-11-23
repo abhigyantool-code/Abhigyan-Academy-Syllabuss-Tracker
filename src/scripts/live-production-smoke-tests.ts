@@ -102,8 +102,8 @@ export async function runProductionSmokeTests(): Promise<SmokeTestResults> {
     });
 
     const setCookie = loginRes.headers.get('set-cookie');
-    if (!setCookie || !setCookie.includes('abg_auth_session=')) {
-      throw new Error('Admin login did not yield abg_auth_session cookie.');
+    if (!setCookie || (!setCookie.includes('abg_admin_session=') && !setCookie.includes('abg_auth_session='))) {
+      throw new Error('Admin login did not yield abg_admin_session or abg_auth_session cookie.');
     }
 
     // Verify authenticated access to /admin
