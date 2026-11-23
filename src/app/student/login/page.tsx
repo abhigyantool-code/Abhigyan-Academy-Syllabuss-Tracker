@@ -1,5 +1,5 @@
 import React from 'react';
-import { getSession } from '@/lib/session';
+import { getStudentSession } from '@/lib/session';
 import { getPbClient } from '@/lib/pb';
 import { redirect } from 'next/navigation';
 import { StudentLoginForm, SafeStudentItem } from '@/components/auth/student-login-form';
@@ -13,15 +13,9 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function StudentLoginPage() {
-  const session = await getSession();
-  if (session) {
-    if (session.role === 'student') {
-      redirect('/student');
-    } else if (session.role === 'faculty') {
-      redirect('/teacher');
-    } else if (session.role === 'admin') {
-      redirect('/admin');
-    }
+  const session = await getStudentSession();
+  if (session && session.role === 'student') {
+    redirect('/student');
   }
 
   // Safe student roster fetch: strictly limits fields to id, name, roll_no

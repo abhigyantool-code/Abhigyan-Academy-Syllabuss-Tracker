@@ -1,5 +1,5 @@
 import React from 'react';
-import { getSession } from '@/lib/session';
+import { getFacultySession } from '@/lib/session';
 import { redirect } from 'next/navigation';
 import { getTeacherDashboardData } from '@/lib/teacher-data';
 import { TeacherPortalClient } from '@/components/teacher/teacher-portal-client';
@@ -16,7 +16,7 @@ interface TeacherPageProps {
 }
 
 export default async function TeacherPage({ searchParams }: TeacherPageProps) {
-  const session = await getSession();
+  const session = await getFacultySession();
 
   // If no faculty session, redirect to login
   if (!session || session.role !== 'faculty' || !session.teacherId) {

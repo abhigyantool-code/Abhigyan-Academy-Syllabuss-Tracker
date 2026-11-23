@@ -1,6 +1,6 @@
 import React from 'react';
 import { getPbClient } from '@/lib/pb';
-import { getSession } from '@/lib/session';
+import { getFacultySession } from '@/lib/session';
 import { redirect } from 'next/navigation';
 import { TeacherLoginForm } from '@/components/auth/teacher-login-form';
 import { UserCheck } from 'lucide-react';
@@ -13,15 +13,9 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function TeacherLoginPage() {
-  const session = await getSession();
-  if (session) {
-    if (session.role === 'faculty') {
-      redirect('/teacher');
-    } else if (session.role === 'admin') {
-      redirect('/admin');
-    } else if (session.role === 'student') {
-      redirect('/student');
-    }
+  const session = await getFacultySession();
+  if (session && session.role === 'faculty') {
+    redirect('/teacher');
   }
 
   // Fetch active teachers for faculty selection

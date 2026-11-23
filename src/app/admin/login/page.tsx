@@ -1,5 +1,5 @@
 import React from 'react';
-import { getSession } from '@/lib/session';
+import { getAdminSession } from '@/lib/session';
 import { redirect } from 'next/navigation';
 import { TeacherLoginForm } from '@/components/auth/teacher-login-form';
 import { Shield } from 'lucide-react';
@@ -12,15 +12,9 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLoginPage() {
-  const session = await getSession();
-  if (session) {
-    if (session.role === 'admin') {
-      redirect('/admin');
-    } else if (session.role === 'faculty') {
-      redirect('/teacher');
-    } else if (session.role === 'student') {
-      redirect('/student');
-    }
+  const session = await getAdminSession();
+  if (session && session.role === 'admin') {
+    redirect('/admin');
   }
 
   return (

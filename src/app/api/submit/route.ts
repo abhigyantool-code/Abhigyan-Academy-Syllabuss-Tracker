@@ -3,7 +3,7 @@ import { getPbClient } from '@/lib/pb';
 import { getTodayIST, checkAcademyHours } from '@/lib/date-utils';
 import { submitEntrySchema, analyzeMisuseFlags } from '@/lib/submission-validation';
 import { getClientIp } from '@/lib/rate-limit';
-import { getSession } from '@/lib/session';
+import { getStudentSession, getAdminSession } from '@/lib/session';
 import { verifyPinDual } from '@/lib/pin-hash';
 
 // In-memory sliding window rate limiter: max 120 submissions per IP per minute (supports 75+ students on shared school NAT Wi-Fi; bounded to prevent OOM, BUG-041)
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Session Authentication & Anti-Spoofing Guard
-    const session = await getSession();
+    const session = (await getStudentSession()) || (await getAdminSession());
     if (!session || (session.role !== 'student' && session.role !== 'admin')) {
       return NextResponse.json(
         { error: 'Unauthorized: Valid student session required to submit class records.' },

@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireAccess } from '@/lib/auth-guard';
-import { getSession } from '@/lib/session';
+import { getStudentSession, getAdminSession } from '@/lib/session';
 import { getPbClient } from '@/lib/pb';
 import { getSubmitFormData } from '@/lib/submit-data';
 import { StudentSubmitForm } from '@/components/submit/student-submit-form';
@@ -17,10 +17,12 @@ export default async function SubmitPage() {
     redirect('/student?mustChangePin=true');
   }
 
-  const [formData, session] = await Promise.all([
+  const [formData, studentSess, adminSess] = await Promise.all([
     getSubmitFormData(),
-    getSession().catch(() => null),
+    getStudentSession().catch(() => null),
+    getAdminSession().catch(() => null),
   ]);
+  const session = studentSess || adminSess;
 
   let defaultStudentSession: {
     id: string;
