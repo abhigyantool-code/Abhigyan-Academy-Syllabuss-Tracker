@@ -51,6 +51,57 @@ export function getCookieNameForRole(role: UserRole): string {
   }
 }
 
+// In-memory token revocation cache (TTL-bounded, pruned against memory leaks)
+// Prevents replayed stateless session tokens from being reused after sign-out (BUG-044)
+const revokedSignatures = new Map<string, number>();
+const MAX_REVOKED_BUCKETS = 10_000;
+
+function pruneRevokedTokens(now: number): void {
+  if (revokedSignatures.size >= MAX_REVOKED_BUCKETS) {
+    for (const [sig, expiry] of revokedSignatures.entries()) {
+      if (expiry <= now) {
+        revokedSignatures.delete(sig);
+      }
+    }
+    // Hard cap eviction if still at capacity (FIFO)
+    while (revokedSignatures.size >= MAX_REVOKED_BUCKETS) {
+      const oldest = revokedSignatures.keys().next().value;
+      if (oldest) revokedSignatures.delete(oldest);
+      else break;
+    }
+  }
+}
+
+export function revokeToken(token: string): void {
+  try {
+    const parts = token.split('.');
+    const signature = parts[1];
+    if (!signature) return;
+    const now = Date.now();
+    pruneRevokedTokens(now);
+    // Retain revoked signature for max session duration so it cannot be replayed before expiry
+    revokedSignatures.set(signature, now + SESSION_MAX_AGE_SECONDS * 1000);
+  } catch {}
+}
+
+export function isTokenRevoked(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    const signature = parts[1];
+    if (!signature) return false;
+    const now = Date.now();
+    const expiry = revokedSignatures.get(signature);
+    if (!expiry) return false;
+    if (expiry <= now) {
+      revokedSignatures.delete(signature);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Signs and encodes payload
 export function signPayload(payload: SessionPayload): string {
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -66,6 +117,11 @@ export function verifyPayload(token: string): SessionPayload | null {
   try {
     const [data, signature] = token.split('.');
     if (!data || !signature) return null;
+
+    // Check revocation cache before cryptographic validation (Bug 4 fix)
+    if (isTokenRevoked(token)) {
+      return null;
+    }
 
     const expectedSig = crypto
       .createHmac('sha256', getSessionSecret())
@@ -194,6 +250,10 @@ export async function destroySession(role?: UserRole): Promise<void> {
     : [STUDENT_SESSION_COOKIE, TEACHER_SESSION_COOKIE, ADMIN_SESSION_COOKIE, LEGACY_SESSION_COOKIE];
 
   for (const cName of cookiesToClear) {
+    const existingVal = cookieStore.get(cName)?.value;
+    if (existingVal) {
+      revokeToken(existingVal);
+    }
     cookieStore.delete(cName);
     cookieStore.set(cName, '', {
       httpOnly: true,

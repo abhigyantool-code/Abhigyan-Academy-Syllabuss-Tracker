@@ -277,18 +277,17 @@ export async function logoutAction(roleOrFormData?: unknown) {
     }
   } catch {}
 
-  // If only one portal session exists, log out from that specific session
+  // If specific role session exists, log out without cascading to other portals.
+  // Never wipe all portals when a user logs out of one portal.
   const [studentSess, facultySess, adminSess] = await Promise.all([
     getStudentSession(),
     getFacultySession(),
     getAdminSession(),
   ]);
-  const activeCount = (studentSess ? 1 : 0) + (facultySess ? 1 : 0) + (adminSess ? 1 : 0);
-  if (activeCount === 1) {
-    if (studentSess) return logoutStudentAction();
-    if (facultySess) return logoutTeacherAction();
-    if (adminSess) return logoutAdminAction();
-  }
+
+  if (studentSess) return logoutStudentAction();
+  if (facultySess) return logoutTeacherAction();
+  if (adminSess) return logoutAdminAction();
 
   await destroyAllSessions();
   redirect('/login');

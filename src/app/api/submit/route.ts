@@ -345,6 +345,24 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Submission API error:', error);
+
+    // Bug Fix: Catch SQLite unique constraint violation from concurrent duplicate submissions
+    // (TOCTOU race: two simultaneous identical requests both pass dupCheck, then second insert
+    //  crashes into idx_entries_student_topic_date — return 409 instead of 500)
+    const errMsg: string = (error?.message || error?.data?.message || String(error)).toLowerCase();
+    if (
+      errMsg.includes('unique') ||
+      errMsg.includes('idx_entries_student_topic_date') ||
+      errMsg.includes('already exists') ||
+      errMsg.includes('duplicate') ||
+      (typeof error?.status === 'number' && error.status === 400 && errMsg.includes('entries'))
+    ) {
+      return NextResponse.json(
+        { error: 'You have already logged this topic for today\'s class. Each student can only log a topic once per day.' },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'An unexpected server error occurred while processing your class log.' },
       { status: 500 }

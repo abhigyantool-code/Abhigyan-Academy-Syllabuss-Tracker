@@ -13,7 +13,8 @@ const ipBuckets = new Map<string, RateLimitEntry>();
 const studentBuckets = new Map<string, RateLimitEntry>();
 
 const WINDOW_MS = 15 * 60 * 1000;       // 15 minutes
-const MAX_IP_ATTEMPTS = 10;             // Max attempts per IP per 15 min
+// Allow configurable MAX_IP_ATTEMPTS via env for production school Wi-Fi (default 10 in unit test mode to preserve test specs)
+const MAX_IP_ATTEMPTS = parseInt(process.env.MAX_IP_LOGIN_ATTEMPTS || '10', 10);
 const MAX_STUDENT_FAILURES = 5;          // Max failed attempts per student before temporary lock
 const LOCKOUT_MS = 15 * 60 * 1000;       // 15-minute lockout
 
