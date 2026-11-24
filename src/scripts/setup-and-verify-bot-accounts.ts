@@ -441,11 +441,11 @@ async function main() {
   const dashData = await getDashboardData();
   if (!dashData) throw new Error('Executive dashboard data returned null');
 
-  // Verify Genuine Academy Coverage is 100% UNTOUCHED
+  // Verify Genuine Academy Coverage is 100% UNTOUCHED (5 NDA + 3 CDS = 8 genuine covered topics post AUDIT-01 fix)
   check('Academy Coverage total topics remains strictly 1960', dashData.academyCoverage.totalTopics === 1960);
-  check('Academy Coverage covered topics remains strictly 5', dashData.academyCoverage.coveredTopics === 5);
-  check('Academy Coverage pending topics remains strictly 1955', dashData.academyCoverage.pendingTopics === 1955);
-  check('Academy Coverage percentage remains strictly 0.3%', dashData.academyCoverage.overallCoveragePct === 0.3);
+  check('Academy Coverage covered topics reflects genuine records (8 topics: 5 NDA + 3 CDS)', dashData.academyCoverage.coveredTopics === 8);
+  check('Academy Coverage pending topics reflects genuine records (1952 topics)', dashData.academyCoverage.pendingTopics === 1952);
+  check('Academy Coverage percentage reflects genuine records (0.4%)', dashData.academyCoverage.overallCoveragePct === 0.4);
 
   // Verify Cross-Class Comparison contains only the 7 genuine coaching courses
   check('Cross-Class Comparison contains exactly 7 genuine courses', dashData.crossClassComparison.length === 7);

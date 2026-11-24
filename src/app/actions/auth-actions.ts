@@ -23,10 +23,14 @@ import { headers } from 'next/headers';
 import {
   safeCompare,
   checkStudentPinRateLimit,
+  checkTeacherPinRateLimit,
   validateNewPinStrength,
   recordPinFailure,
   recordPinSuccess,
+  recordTeacherPinFailure,
+  recordTeacherPinSuccess,
   releasePinAttempt,
+  releaseTeacherPinAttempt,
   getClientIp,
   isIpRateLimited,
   checkAdminRateLimit,
@@ -48,8 +52,8 @@ export async function teacherLoginAction(
     // In test or non-HTTP environments
   }
 
-  // Pre-flight IP rate limit check
-  const ipCheck = isIpRateLimited(clientIp);
+  // Pre-flight IP rate limit check (isolated for faculty role)
+  const ipCheck = isIpRateLimited(clientIp, 'teacher');
   if (!ipCheck.allowed) {
     return { success: false, error: ipCheck.error || 'Too many requests from your network. Please wait.' };
   }
@@ -68,7 +72,7 @@ export async function teacherLoginAction(
     try {
       teacher = await pb.collection('teachers').getOne(teacherId);
     } catch {
-      recordPinFailure('unknown_teacher', clientIp);
+      recordTeacherPinFailure(`unknown_teacher:${teacherId}`, clientIp);
       return { success: false, error: 'Teacher record not found.' };
     }
 
@@ -78,8 +82,8 @@ export async function teacherLoginAction(
       return { success: false, error: 'This faculty account is deactivated. Please contact the administrator.' };
     }
 
-    // Rate limit check before verifying PIN
-    const rateCheck = checkStudentPinRateLimit(teacher.id, clientIp);
+    // Rate limit check before verifying PIN (Layer 1 account & Layer 2 IP protection)
+    const rateCheck = checkTeacherPinRateLimit(teacher.id, clientIp);
     if (!rateCheck.allowed) {
       return { success: false, error: rateCheck.error || 'Too many failed login attempts. Account temporarily locked.' };
     }
@@ -89,12 +93,12 @@ export async function teacherLoginAction(
     const verification = await verifyPinDual(pin.trim(), teacher.pin_hash, teacher.pin);
     if (!verification.valid) {
       inFlightReserved = false;
-      recordPinFailure(teacher.id, clientIp);
+      recordTeacherPinFailure(teacher.id, clientIp);
       return { success: false, error: 'Incorrect PIN. Please try again.' };
     }
 
     inFlightReserved = false;
-    recordPinSuccess(teacher.id, clientIp);
+    recordTeacherPinSuccess(teacher.id, clientIp);
 
     // Opportunistic hash upgrade if authenticated via plaintext
     if (verification.needsMigration) {
@@ -127,7 +131,7 @@ export async function teacherLoginAction(
     return { success: true, mustChangePin: mustRotatePin };
   } catch (err: any) {
     if (inFlightReserved) {
-      releasePinAttempt(resolvedTeacherId, clientIp);
+      releaseTeacherPinAttempt(resolvedTeacherId, clientIp);
     }
     console.error('teacherLoginAction error:', err);
     return { success: false, error: 'An unexpected server error occurred. Please try again or contact the administrator.' };
@@ -409,7 +413,7 @@ export async function changeStudentPinAction(
         const safeId = studentIdentifier.replace(/["\\]/g, '');
         student = await pb.collection('students').getFirstListItem(`roll_no="${safeId}"`);
       } catch {
-        recordPinFailure('unknown_student', clientIp);
+        recordPinFailure(`unknown_student:${studentIdentifier.trim().toUpperCase()}`, clientIp);
         return { success: false, error: 'Student record not found.' };
       }
     }
@@ -553,13 +557,13 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
     // In test or non-HTTP environments
   }
 
-  // Pre-flight check on IP rate limit
-  const ipCheck = isIpRateLimited(clientIp);
+  // Pre-flight check on IP rate limit (isolated for faculty role)
+  const ipCheck = isIpRateLimited(clientIp, 'teacher');
   if (!ipCheck.allowed) {
     throw new Error(ipCheck.error || 'Too many requests from your network. Please wait.');
   }
 
-  const rateCheck = checkStudentPinRateLimit(session.teacherId, clientIp);
+  const rateCheck = checkTeacherPinRateLimit(session.teacherId, clientIp);
   if (!rateCheck.allowed) {
     throw new Error(rateCheck.error || 'Account temporarily locked due to multiple failed PIN attempts.');
   }
@@ -572,12 +576,12 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
     const verification = await verifyPinDual(oldPin.trim(), teacher.pin_hash, teacher.pin);
     if (!verification.valid) {
       inFlightReserved = false;
-      recordPinFailure(session.teacherId, clientIp);
+      recordTeacherPinFailure(session.teacherId, clientIp);
       throw new Error('Old PIN is incorrect.');
     }
 
     inFlightReserved = false;
-    recordPinSuccess(session.teacherId, clientIp);
+    recordTeacherPinSuccess(session.teacherId, clientIp);
 
     const newPinHash = await hashPin(newPin.trim());
     await pb.collection('teachers').update(session.teacherId, {
@@ -603,7 +607,7 @@ export async function updateTeacherPinAction(oldPin: string, newPin: string) {
     return { success: true };
   } catch (err: any) {
     if (inFlightReserved) {
-      releasePinAttempt(session.teacherId, clientIp);
+      releaseTeacherPinAttempt(session.teacherId, clientIp);
     }
     throw err;
   }
@@ -675,7 +679,7 @@ export async function studentLoginAction(
     try {
       student = await pb.collection('students').getFirstListItem(`roll_no = "${cleanRoll}"`);
     } catch {
-      recordPinFailure('unknown_student', clientIp);
+      recordPinFailure(`unknown_student:${cleanRoll}`, clientIp);
       return { success: false, error: 'Invalid Roll Number or PIN.' };
     }
 

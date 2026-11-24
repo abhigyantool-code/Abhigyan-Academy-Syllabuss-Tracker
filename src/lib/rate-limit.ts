@@ -9,18 +9,44 @@ interface RateLimitEntry {
 }
 
 // In-memory buckets for sliding-window rate limiting
-const ipBuckets = new Map<string, RateLimitEntry>();
+// Layer 1: Individual account protection (Student & Faculty accounts)
 const studentBuckets = new Map<string, RateLimitEntry>();
+const teacherBuckets = new Map<string, RateLimitEntry>();
+
+// Layer 2: Network-level shared IP protection (Classroom Wi-Fi / NAT router)
+const ipBuckets = new Map<string, RateLimitEntry>(); // Student IP buckets
+const teacherIpBuckets = new Map<string, RateLimitEntry>(); // Teacher IP buckets
+
+// Layer 3: Administrative protection (Director master password)
+const adminBuckets = new Map<string, RateLimitEntry>();
 
 const WINDOW_MS = 15 * 60 * 1000;       // 15 minutes
-// Allow configurable MAX_IP_ATTEMPTS via env for production school Wi-Fi (default 10 in unit test mode to preserve test specs)
-const MAX_IP_ATTEMPTS = parseInt(process.env.MAX_IP_LOGIN_ATTEMPTS || '10', 10);
-const MAX_STUDENT_FAILURES = 5;          // Max failed attempts per student before temporary lock
+const MAX_STUDENT_FAILURES = 5;          // Max failed attempts per student/teacher account before temporary lock
+const MAX_ADMIN_FAILURES = 5;            // Strict max failed attempts for Director admin master password
 const LOCKOUT_MS = 15 * 60 * 1000;       // 15-minute lockout
 
 // Maximum capacity for in-memory buckets to prevent memory exhaustion (BUG-041)
 const MAX_IP_BUCKETS = 10_000;
 const MAX_STUDENT_BUCKETS = 10_000;
+
+/**
+ * Returns the effective maximum IP attempts permitted within the sliding window.
+ * - In production environments, defaults to 100 to comfortably accommodate dozens of students
+ *   and faculty sharing the academy's public NAT/Wi-Fi router without collective lockout contagion.
+ * - Can be overridden via MAX_IP_LOGIN_ATTEMPTS environment variable.
+ * - In isolated unit test mode (when process.env.NODE_ENV !== 'production' and env is unset),
+ *   preserves the historical baseline of 10 for test suite specifications.
+ */
+export function getMaxIpAttempts(role: 'student' | 'teacher' = 'student'): number {
+  if (process.env.MAX_IP_LOGIN_ATTEMPTS) {
+    const parsed = parseInt(process.env.MAX_IP_LOGIN_ATTEMPTS, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return 100;
+  }
+  return 10;
+}
 
 /**
  * Validates whether a string is a valid IPv4 or IPv6 address.
@@ -126,9 +152,15 @@ export function validateNewPinStrength(newPin: string, currentPin?: string): { v
  * Checks whether an IP address is currently locked out or has exceeded rate limits.
  * Call before executing expensive database queries.
  */
-export function isIpRateLimited(clientIp: string): { allowed: boolean; error?: string } {
+export function isIpRateLimited(
+  clientIp: string,
+  role: 'student' | 'teacher' = 'student'
+): { allowed: boolean; error?: string } {
   const now = Date.now();
-  const ipEntry = ipBuckets.get(clientIp);
+  const buckets = role === 'teacher' ? teacherIpBuckets : ipBuckets;
+  const ipEntry = buckets.get(clientIp);
+  const maxAttempts = getMaxIpAttempts(role);
+
   if (ipEntry) {
     if (ipEntry.lockedUntil && ipEntry.lockedUntil > now) {
       const remainingMinutes = Math.ceil((ipEntry.lockedUntil - now) / 60000);
@@ -138,7 +170,7 @@ export function isIpRateLimited(clientIp: string): { allowed: boolean; error?: s
       };
     }
     if (now - ipEntry.lastAttempt < WINDOW_MS) {
-      if (ipEntry.attempts >= MAX_IP_ATTEMPTS) {
+      if (ipEntry.attempts >= maxAttempts) {
         ipEntry.lockedUntil = now + LOCKOUT_MS;
         return {
           allowed: false,
@@ -146,7 +178,7 @@ export function isIpRateLimited(clientIp: string): { allowed: boolean; error?: s
         };
       }
       const effectiveAttempts = ipEntry.attempts + ipEntry.inFlight;
-      if (effectiveAttempts >= MAX_IP_ATTEMPTS) {
+      if (effectiveAttempts >= maxAttempts) {
         return {
           allowed: false,
           error: 'Too many requests from your network. Please try again in a moment.',
@@ -158,19 +190,26 @@ export function isIpRateLimited(clientIp: string): { allowed: boolean; error?: s
 }
 
 /**
- * Checks rate limits for a PIN authentication / change attempt.
+ * Checks rate limits for an account PIN authentication / change attempt.
  * Reserves an in-flight attempt to prevent concurrent request race conditions (BUG-038).
+ * Layer 1: Account-level failure lockout (5 failed attempts).
+ * Layer 2: Network-level shared IP rate limiting (tolerant threshold to prevent classroom lockout).
  * Returns { allowed: boolean, error?: string }.
  */
 export function checkStudentPinRateLimit(
   studentId: string,
-  clientIp: string
+  clientIp: string,
+  role: 'student' | 'teacher' = 'student'
 ): { allowed: boolean; error?: string } {
   const now = Date.now();
   cleanupExpiredBuckets(now);
 
+  const ipMap = role === 'teacher' ? teacherIpBuckets : ipBuckets;
+  const accountMap = role === 'teacher' ? teacherBuckets : studentBuckets;
+  const maxIpAttempts = getMaxIpAttempts(role);
+
   // 1. Check IP-level rate limit
-  let ipEntry = ipBuckets.get(clientIp);
+  let ipEntry = ipMap.get(clientIp);
   if (ipEntry) {
     if (ipEntry.lockedUntil && ipEntry.lockedUntil > now) {
       const remainingMinutes = Math.ceil((ipEntry.lockedUntil - now) / 60000);
@@ -181,7 +220,7 @@ export function checkStudentPinRateLimit(
     }
 
     if (now - ipEntry.lastAttempt < WINDOW_MS) {
-      if (ipEntry.attempts >= MAX_IP_ATTEMPTS) {
+      if (ipEntry.attempts >= maxIpAttempts) {
         ipEntry.lockedUntil = now + LOCKOUT_MS;
         return {
           allowed: false,
@@ -189,7 +228,7 @@ export function checkStudentPinRateLimit(
         };
       }
       const effectiveIpAttempts = ipEntry.attempts + ipEntry.inFlight;
-      if (effectiveIpAttempts >= MAX_IP_ATTEMPTS) {
+      if (effectiveIpAttempts >= maxIpAttempts) {
         return {
           allowed: false,
           error: 'Too many concurrent authentication requests from your network. Please try again in a moment.',
@@ -203,25 +242,25 @@ export function checkStudentPinRateLimit(
   }
 
   // 2. Check student/account-level failure lockout
-  let studentEntry = studentBuckets.get(studentId);
-  if (studentEntry) {
-    if (studentEntry.lockedUntil && studentEntry.lockedUntil > now) {
-      const remainingMinutes = Math.ceil((studentEntry.lockedUntil - now) / 60000);
+  let accountEntry = accountMap.get(studentId);
+  if (accountEntry) {
+    if (accountEntry.lockedUntil && accountEntry.lockedUntil > now) {
+      const remainingMinutes = Math.ceil((accountEntry.lockedUntil - now) / 60000);
       return {
         allowed: false,
         error: `Account temporarily locked due to multiple failed PIN attempts. Please wait ${remainingMinutes} minute(s) or contact administration.`,
       };
     }
 
-    if (now - studentEntry.lastAttempt < WINDOW_MS) {
-      if (studentEntry.attempts >= MAX_STUDENT_FAILURES) {
-        studentEntry.lockedUntil = now + LOCKOUT_MS;
+    if (now - accountEntry.lastAttempt < WINDOW_MS) {
+      if (accountEntry.attempts >= MAX_STUDENT_FAILURES) {
+        accountEntry.lockedUntil = now + LOCKOUT_MS;
         return {
           allowed: false,
           error: 'Account locked for 15 minutes due to repeated failed PIN attempts.',
         };
       }
-      const effectiveStudentAttempts = studentEntry.attempts + studentEntry.inFlight;
+      const effectiveStudentAttempts = accountEntry.attempts + accountEntry.inFlight;
       if (effectiveStudentAttempts >= MAX_STUDENT_FAILURES) {
         return {
           allowed: false,
@@ -230,28 +269,28 @@ export function checkStudentPinRateLimit(
       }
     } else {
       // Window expired, reset
-      studentEntry.attempts = 0;
-      studentEntry.inFlight = 0;
+      accountEntry.attempts = 0;
+      accountEntry.inFlight = 0;
     }
   }
 
   // Atomically reserve attempt slot to eliminate concurrent request race condition (BUG-038)
-  enforceCapacity(ipBuckets, MAX_IP_BUCKETS, now);
+  enforceCapacity(ipMap, MAX_IP_BUCKETS, now);
   if (!ipEntry) {
     ipEntry = { attempts: 0, inFlight: 1, lastAttempt: now };
-    ipBuckets.set(clientIp, ipEntry);
+    ipMap.set(clientIp, ipEntry);
   } else {
     ipEntry.inFlight += 1;
     ipEntry.lastAttempt = now;
   }
 
-  enforceCapacity(studentBuckets, MAX_STUDENT_BUCKETS, now);
-  if (!studentEntry) {
-    studentEntry = { attempts: 0, inFlight: 1, lastAttempt: now };
-    studentBuckets.set(studentId, studentEntry);
+  enforceCapacity(accountMap, MAX_STUDENT_BUCKETS, now);
+  if (!accountEntry) {
+    accountEntry = { attempts: 0, inFlight: 1, lastAttempt: now };
+    accountMap.set(studentId, accountEntry);
   } else {
-    studentEntry.inFlight += 1;
-    studentEntry.lastAttempt = now;
+    accountEntry.inFlight += 1;
+    accountEntry.lastAttempt = now;
   }
 
   return { allowed: true };
@@ -260,12 +299,19 @@ export function checkStudentPinRateLimit(
 /**
  * Releases reserved in-flight attempt if operation terminates before PIN check.
  */
-export function releasePinAttempt(studentId: string, clientIp: string): void {
-  const studentEntry = studentBuckets.get(studentId);
-  if (studentEntry && studentEntry.inFlight > 0) {
-    studentEntry.inFlight -= 1;
+export function releasePinAttempt(
+  studentId: string,
+  clientIp: string,
+  role: 'student' | 'teacher' = 'student'
+): void {
+  const accountMap = role === 'teacher' ? teacherBuckets : studentBuckets;
+  const ipMap = role === 'teacher' ? teacherIpBuckets : ipBuckets;
+
+  const accountEntry = accountMap.get(studentId);
+  if (accountEntry && accountEntry.inFlight > 0) {
+    accountEntry.inFlight -= 1;
   }
-  const ipEntry = ipBuckets.get(clientIp);
+  const ipEntry = ipMap.get(clientIp);
   if (ipEntry && ipEntry.inFlight > 0) {
     ipEntry.inFlight -= 1;
   }
@@ -274,12 +320,19 @@ export function releasePinAttempt(studentId: string, clientIp: string): void {
 /**
  * Records a failed PIN attempt for rate limiting and lockout.
  */
-export function recordPinFailure(studentId: string, clientIp: string): void {
+export function recordPinFailure(
+  studentId: string,
+  clientIp: string,
+  role: 'student' | 'teacher' = 'student'
+): void {
   const now = Date.now();
+  const ipMap = role === 'teacher' ? teacherIpBuckets : ipBuckets;
+  const accountMap = role === 'teacher' ? teacherBuckets : studentBuckets;
+  const maxIpAttempts = getMaxIpAttempts(role);
 
   // IP bucket
-  enforceCapacity(ipBuckets, MAX_IP_BUCKETS, now);
-  const ipEntry = ipBuckets.get(clientIp) || { attempts: 0, inFlight: 0, lastAttempt: now };
+  enforceCapacity(ipMap, MAX_IP_BUCKETS, now);
+  const ipEntry = ipMap.get(clientIp) || { attempts: 0, inFlight: 0, lastAttempt: now };
   if (ipEntry.inFlight > 0) {
     ipEntry.inFlight -= 1;
   }
@@ -289,40 +342,47 @@ export function recordPinFailure(studentId: string, clientIp: string): void {
     ipEntry.attempts += 1;
   }
   ipEntry.lastAttempt = now;
-  if (ipEntry.attempts >= MAX_IP_ATTEMPTS) {
+  if (ipEntry.attempts >= maxIpAttempts) {
     ipEntry.lockedUntil = now + LOCKOUT_MS;
   }
-  ipBuckets.set(clientIp, ipEntry);
+  ipMap.set(clientIp, ipEntry);
 
-  // Student bucket
-  enforceCapacity(studentBuckets, MAX_STUDENT_BUCKETS, now);
-  const studentEntry = studentBuckets.get(studentId) || { attempts: 0, inFlight: 0, lastAttempt: now };
-  if (studentEntry.inFlight > 0) {
-    studentEntry.inFlight -= 1;
+  // Account bucket
+  enforceCapacity(accountMap, MAX_STUDENT_BUCKETS, now);
+  const accountEntry = accountMap.get(studentId) || { attempts: 0, inFlight: 0, lastAttempt: now };
+  if (accountEntry.inFlight > 0) {
+    accountEntry.inFlight -= 1;
   }
-  if (now - studentEntry.lastAttempt > WINDOW_MS) {
-    studentEntry.attempts = 1;
+  if (now - accountEntry.lastAttempt > WINDOW_MS) {
+    accountEntry.attempts = 1;
   } else {
-    studentEntry.attempts += 1;
+    accountEntry.attempts += 1;
   }
-  studentEntry.lastAttempt = now;
+  accountEntry.lastAttempt = now;
 
-  if (studentEntry.attempts >= MAX_STUDENT_FAILURES) {
-    studentEntry.lockedUntil = now + LOCKOUT_MS;
+  if (accountEntry.attempts >= MAX_STUDENT_FAILURES) {
+    accountEntry.lockedUntil = now + LOCKOUT_MS;
   }
-  studentBuckets.set(studentId, studentEntry);
+  accountMap.set(studentId, accountEntry);
 }
 
 /**
  * Resets the student failure counter upon successful authentication.
  * Releases in-flight IP reservation without penalizing legitimate network users.
  */
-export function recordPinSuccess(studentId: string, clientIp: string): void {
-  studentBuckets.delete(studentId);
+export function recordPinSuccess(
+  studentId: string,
+  clientIp: string,
+  role: 'student' | 'teacher' = 'student'
+): void {
+  const accountMap = role === 'teacher' ? teacherBuckets : studentBuckets;
+  const ipMap = role === 'teacher' ? teacherIpBuckets : ipBuckets;
+
+  accountMap.delete(studentId);
 
   // Decrement inFlight attempt on the IP bucket without incrementing failed attempts
   const now = Date.now();
-  const ipEntry = ipBuckets.get(clientIp);
+  const ipEntry = ipMap.get(clientIp);
   if (ipEntry) {
     if (ipEntry.inFlight > 0) {
       ipEntry.inFlight -= 1;
@@ -331,9 +391,27 @@ export function recordPinSuccess(studentId: string, clientIp: string): void {
   }
 }
 
-// In-memory bucket for Admin Director master password protection
-const adminBuckets = new Map<string, RateLimitEntry>();
-const MAX_ADMIN_FAILURES = 5;
+/**
+ * Dedicated Teacher rate-limiting helpers for faculty isolation.
+ */
+export function checkTeacherPinRateLimit(
+  teacherId: string,
+  clientIp: string
+): { allowed: boolean; error?: string } {
+  return checkStudentPinRateLimit(teacherId, clientIp, 'teacher');
+}
+
+export function recordTeacherPinFailure(teacherId: string, clientIp: string): void {
+  recordPinFailure(teacherId, clientIp, 'teacher');
+}
+
+export function recordTeacherPinSuccess(teacherId: string, clientIp: string): void {
+  recordPinSuccess(teacherId, clientIp, 'teacher');
+}
+
+export function releaseTeacherPinAttempt(teacherId: string, clientIp: string): void {
+  releasePinAttempt(teacherId, clientIp, 'teacher');
+}
 
 /**
  * Checks whether the client IP has exceeded failed Director login attempts.
@@ -391,9 +469,19 @@ function cleanupExpiredBuckets(now: number): void {
       ipBuckets.delete(ip);
     }
   }
+  for (const [ip, entry] of teacherIpBuckets.entries()) {
+    if (now - entry.lastAttempt > WINDOW_MS && (!entry.lockedUntil || entry.lockedUntil < now) && entry.inFlight === 0) {
+      teacherIpBuckets.delete(ip);
+    }
+  }
   for (const [studentId, entry] of studentBuckets.entries()) {
     if (now - entry.lastAttempt > WINDOW_MS && (!entry.lockedUntil || entry.lockedUntil < now) && entry.inFlight === 0) {
       studentBuckets.delete(studentId);
+    }
+  }
+  for (const [teacherId, entry] of teacherBuckets.entries()) {
+    if (now - entry.lastAttempt > WINDOW_MS && (!entry.lockedUntil || entry.lockedUntil < now) && entry.inFlight === 0) {
+      teacherBuckets.delete(teacherId);
     }
   }
   for (const [ip, entry] of adminBuckets.entries()) {
@@ -423,6 +511,8 @@ function enforceCapacity(map: Map<string, RateLimitEntry>, maxCapacity: number, 
 export function resetRateLimitsForTesting(): void {
   ipBuckets.clear();
   studentBuckets.clear();
+  teacherIpBuckets.clear();
+  teacherBuckets.clear();
   adminBuckets.clear();
 }
 

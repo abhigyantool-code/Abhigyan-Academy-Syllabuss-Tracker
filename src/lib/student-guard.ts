@@ -54,7 +54,7 @@ export async function verifyStudent(
         const cleanRoll = studentId.trim().toUpperCase();
         student = await pb.collection('students').getFirstListItem(`roll_no = "${cleanRoll}"`);
       } catch {
-        recordPinFailure('unknown_student', clientIp);
+        recordPinFailure(`unknown_student:${studentId.trim().toUpperCase()}`, clientIp);
         return { valid: false, error: 'Student not found in academy records. Please verify your Roll Number.' };
       }
     }

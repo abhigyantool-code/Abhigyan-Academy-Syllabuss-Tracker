@@ -135,26 +135,32 @@ export function isTestAccount(name?: string, rollOrPhone?: string): boolean {
 }
 
 export async function getActiveCourses(): Promise<DashboardCourse[]> {
-  const pb = await getPbClient();
-  const list = await pb.collection('courses').getFullList({
-    filter: 'active = true',
-    sort: 'sort_order',
-  });
-  return list.map((c) => ({
-    id: c.id,
-    name: c.name,
-    code: c.code,
-    sort_order: c.sort_order || 0,
-  }));
+  try {
+    const pb = await getPbClient();
+    const list = await pb.collection('courses').getFullList({
+      filter: 'active = true',
+      sort: 'sort_order',
+    });
+    return list.map((c) => ({
+      id: c.id,
+      name: c.name,
+      code: c.code,
+      sort_order: c.sort_order || 0,
+    }));
+  } catch (err) {
+    console.error('[Dashboard] Failed to fetch active courses from PocketBase:', err);
+    return [];
+  }
 }
 
 export async function getDashboardData(courseId?: string) {
-  const courses = await getActiveCourses();
-  if (courses.length === 0) {
-    return null;
-  }
+  try {
+    const courses = await getActiveCourses();
+    if (courses.length === 0) {
+      return null;
+    }
 
-  const selectedCourse = courses.find((c) => c.id === courseId) || courses[0];
+    const selectedCourse = courses.find((c) => c.id === courseId) || courses[0];
   const cId = selectedCourse.id;
   const today = getTodayIST();
   const pb = await getPbClient();
@@ -183,8 +189,12 @@ export async function getDashboardData(courseId?: string) {
     .collection('teaching_records')
     .getFullList({
       filter: `course = "${cId}" && is_voided = false`,
+      expand: 'teacher',
     })
-    .catch(() => [] as any[]);
+    .catch((err) => {
+      console.error(`[Dashboard] Failed to fetch course teaching records for course ${cId}:`, err);
+      return [] as any[];
+    });
 
   // All teaching records across the academy for pacing and cross-course analytics
   const allTeachingRecordsPromise = pb
@@ -192,9 +202,12 @@ export async function getDashboardData(courseId?: string) {
     .getFullList({
       filter: `is_voided = false`,
       expand: 'teacher,course,subject,topic',
-      sort: '-session_date,-created',
+      sort: '-session_date',
     })
-    .catch(() => [] as any[]);
+    .catch((err) => {
+      console.error('[Dashboard] Failed to fetch all teaching records across academy:', err);
+      return [] as any[];
+    });
 
   // All topics and subjects across the academy for cross-class comparison
   const [
@@ -223,8 +236,20 @@ export async function getDashboardData(courseId?: string) {
     pb.collection('topics').getFullList({
       expand: 'subject',
       fields: 'id,subject,name,seq_no,target_date,expand.subject.course',
-    }).catch(() => [] as any[]),
+    }).catch((err) => {
+      console.error('[Dashboard] Failed to fetch all courses topics:', err);
+      return [] as any[];
+    }),
   ]);
+
+  // Genuine teaching records for selected course (filter test teachers on genuine courses)
+  const isSelectedTestCourse = isTestCourse(selectedCourse);
+  const validCourseTeachingRecords = isSelectedTestCourse
+    ? courseTeachingRecords
+    : courseTeachingRecords.filter((tr) => {
+        const teaObj = (tr.expand as any)?.teacher;
+        return !isTestAccount(teaObj?.name, teaObj?.phone);
+      });
 
   // Subject ID to Name map
   const subjectNameMap = new Map(subjects.map((s) => [s.id, s.name]));
@@ -281,7 +306,7 @@ export async function getDashboardData(courseId?: string) {
   }
 
   // Combine teaching_records (genuine completed teaching records satisfy coverage directly)
-  for (const tr of courseTeachingRecords) {
+  for (const tr of validCourseTeachingRecords) {
     if (!topicStatsMap.has(tr.topic)) {
       topicStatsMap.set(tr.topic, {
         covered: new Set(),
@@ -402,7 +427,7 @@ export async function getDashboardData(courseId?: string) {
   const weeklyClassesSet = new Set<string>();
   const monthlyClassesSet = new Set<string>();
 
-  for (const tr of courseTeachingRecords) {
+  for (const tr of validCourseTeachingRecords) {
     if (tr.teacher && tr.session_date && tr.status === 'completed' && !tr.is_voided) {
       const key = `${tr.teacher}_${tr.session_date}_${tr.topic}`;
       if (tr.session_date === today) dailyClassesSet.add(key);
@@ -434,7 +459,7 @@ export async function getDashboardData(courseId?: string) {
       distinctClasses.add(`${ent.teacher}_${ent.class_date}`);
     }
   }
-  for (const tr of courseTeachingRecords) {
+  for (const tr of validCourseTeachingRecords) {
     if (tr.teacher && tr.session_date && tr.status === 'completed' && !tr.is_voided) {
       distinctClasses.add(`${tr.teacher}_${tr.session_date}`);
     }
@@ -458,6 +483,12 @@ export async function getDashboardData(courseId?: string) {
   // Build covered topic set across all courses from teaching records and completed entries
   const allCoveredTopicIds = new Set<string>();
   for (const tr of allTeachingRecords) {
+    const teaObj = (tr.expand as any)?.teacher;
+    const courseObj = (tr.expand as any)?.course;
+    // Exclude BOT accounts and test courses from genuine academic metrics
+    if (isTestAccount(teaObj?.name, teaObj?.phone) || (courseObj && isTestCourse(courseObj))) {
+      continue;
+    }
     if (tr.topic && tr.status === 'completed' && !tr.is_voided) {
       allCoveredTopicIds.add(tr.topic);
     }
@@ -525,7 +556,7 @@ export async function getDashboardData(courseId?: string) {
       continue;
     }
     const teaEntries = courseEntries.filter((e) => e.teacher === tea.id);
-    const teaTeachingRecs = courseTeachingRecords.filter((t) => t.teacher === tea.id && t.status === 'completed' && !t.is_voided);
+    const teaTeachingRecs = validCourseTeachingRecords.filter((t) => t.teacher === tea.id && t.status === 'completed' && !t.is_voided);
     if (teaEntries.length === 0 && teaTeachingRecs.length === 0) continue;
 
     const coveredTopicIds = new Set<string>();
@@ -639,10 +670,18 @@ export async function getDashboardData(courseId?: string) {
 
   // 8. Genuine Teaching Sessions Activity (Completely Free from Private Student Data)
   // Queries completed teaching records for this course (or academy-wide if course has few)
-  const courseTeachingSessions = allTeachingRecords.filter(
+  const isSelectedCourseTest = isTestCourse(selectedCourse);
+  const filteredTeachingRecords = allTeachingRecords.filter((tr) => {
+    if (isSelectedCourseTest) return true;
+    const teaObj = (tr.expand as any)?.teacher;
+    const courseObj = (tr.expand as any)?.course;
+    return !isTestAccount(teaObj?.name, teaObj?.phone) && !(courseObj && isTestCourse(courseObj));
+  });
+
+  const courseTeachingSessions = filteredTeachingRecords.filter(
     (tr) => tr.course === cId || (tr.expand as any)?.course?.id === cId
   );
-  const recordsToUse = courseTeachingSessions.length > 0 ? courseTeachingSessions : allTeachingRecords;
+  const recordsToUse = courseTeachingSessions.length > 0 ? courseTeachingSessions : filteredTeachingRecords;
 
   const teachingSessions: TeachingSessionItem[] = recordsToUse.slice(0, 15).map((tr) => {
     const teacherObj = (tr.expand as any)?.teacher;
@@ -665,18 +704,22 @@ export async function getDashboardData(courseId?: string) {
     };
   });
 
-  return {
-    courses,
-    selectedCourse,
-    overviewMetrics,
-    pacingMetrics,
-    crossClassComparison,
-    academyCoverage,
-    subjectProgress,
-    topicProgress,
-    teacherScorecard,
-    timelineData,
-    teachingSessions,
-    today,
-  };
+    return {
+      courses,
+      selectedCourse,
+      overviewMetrics,
+      pacingMetrics,
+      crossClassComparison,
+      academyCoverage,
+      subjectProgress,
+      topicProgress,
+      teacherScorecard,
+      timelineData,
+      teachingSessions,
+      today,
+    };
+  } catch (err) {
+    console.error('[Dashboard] Fatal error computing dashboard metrics:', err);
+    return null;
+  }
 }
