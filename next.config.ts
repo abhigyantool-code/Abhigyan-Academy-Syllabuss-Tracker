@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    agentUpgrade: 'security' as any,
+  },
   output: "standalone",
   turbopack: {
     rules: {
