@@ -219,16 +219,13 @@ Executed live against `https://syllabus360.abhigyanintelligence.cloud`:
 
 If unexpected production issues arise, the deployment can be rolled back immediately without database migrations or data loss:
 
-1. **Revert Git Commit on `main`:**
+1. **Revert Git Commit on `main` (Recommended & Safe):**
    ```bash
    cd /home/ayush/.gemini/antigravity/scratch/syllabus-tracker
-   git revert cd3951e --no-edit
+   git revert a9d41ae..HEAD --no-edit # or specific commit hash: git revert <commit_hash> --no-edit
    git push origin main
    ```
-   *Alternatively, hard reset to the previous verified commit:*
-   ```bash
-   git push -f origin 9ab3edb:main
-   ```
+   *Note: Never use force-push (`git push -f`) on shared production branches as it destructively alters commit history and disrupts automated Coolify webhook deployments.*
 
 2. **Verify Coolify Auto-Deployment:**
    Monitor the health endpoint until the previous container version is active:

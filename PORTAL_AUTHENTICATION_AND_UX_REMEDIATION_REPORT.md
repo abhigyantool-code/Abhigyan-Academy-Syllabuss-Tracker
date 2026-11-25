@@ -184,15 +184,12 @@ The final security review script (`src/scripts/final-security-review.ts`) was ex
 
 In the event of an unforeseen production anomaly, follow these steps to instantly rollback to the previous stable release:
 
-1. **Rollback Git Commit:**
+1. **Rollback Git Commit (Safe History-Preserving Revert):**
    ```bash
-   git revert --no-edit d472173
+   git revert --no-edit <commit_to_revert>
    git push origin main
    ```
-   *Or checkout previous commit:*
-   ```bash
-   git push -f origin 5242a57:main
-   ```
+   *Note: Never execute a force push (`git push -f`) on production branches to preserve audit trails and avoid webhook desynchronization.*
 
 2. **Trigger Coolify Redeployment:**
    ```bash
