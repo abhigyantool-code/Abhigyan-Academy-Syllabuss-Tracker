@@ -33,13 +33,24 @@ const MAX_STUDENT_BUCKETS = 10_000;
  * Returns the effective maximum IP attempts permitted within the sliding window.
  * - In production environments, defaults to 100 to comfortably accommodate dozens of students
  *   and faculty sharing the academy's public NAT/Wi-Fi router without collective lockout contagion.
- * - Can be overridden via MAX_IP_LOGIN_ATTEMPTS environment variable.
+ * - Supports MAX_IP_LOGIN_ATTEMPTS or MAX_IP_ATTEMPTS environment variables.
+ * - Supports role-specific overrides (MAX_TEACHER_IP_ATTEMPTS / MAX_STUDENT_IP_ATTEMPTS).
  * - In isolated unit test mode (when process.env.NODE_ENV !== 'production' and env is unset),
  *   preserves the historical baseline of 10 for test suite specifications.
  */
 export function getMaxIpAttempts(role: 'student' | 'teacher' = 'student'): number {
-  if (process.env.MAX_IP_LOGIN_ATTEMPTS) {
-    const parsed = parseInt(process.env.MAX_IP_LOGIN_ATTEMPTS, 10);
+  const envVal =
+    role === 'teacher'
+      ? process.env.MAX_TEACHER_IP_ATTEMPTS ||
+        process.env.MAX_TEACHER_IP_LOGIN_ATTEMPTS ||
+        process.env.MAX_IP_LOGIN_ATTEMPTS ||
+        process.env.MAX_IP_ATTEMPTS
+      : process.env.MAX_STUDENT_IP_ATTEMPTS ||
+        process.env.MAX_IP_LOGIN_ATTEMPTS ||
+        process.env.MAX_IP_ATTEMPTS;
+
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
     if (!isNaN(parsed) && parsed > 0) return parsed;
   }
   if (process.env.NODE_ENV === 'production') {
@@ -162,12 +173,19 @@ export function isIpRateLimited(
   const maxAttempts = getMaxIpAttempts(role);
 
   if (ipEntry) {
-    if (ipEntry.lockedUntil && ipEntry.lockedUntil > now) {
-      const remainingMinutes = Math.ceil((ipEntry.lockedUntil - now) / 60000);
-      return {
-        allowed: false,
-        error: `Too many requests from your network. Please wait ${remainingMinutes} minute(s).`,
-      };
+    if (ipEntry.lockedUntil) {
+      if (ipEntry.lockedUntil > now) {
+        const remainingMinutes = Math.ceil((ipEntry.lockedUntil - now) / 60000);
+        return {
+          allowed: false,
+          error: `Too many requests from your network. Please wait ${remainingMinutes} minute(s).`,
+        };
+      } else {
+        // Lockout expired: reset attempts and clear lockout
+        ipEntry.lockedUntil = undefined;
+        ipEntry.attempts = 0;
+        ipEntry.inFlight = 0;
+      }
     }
     if (now - ipEntry.lastAttempt < WINDOW_MS) {
       if (ipEntry.attempts >= maxAttempts) {
@@ -184,6 +202,9 @@ export function isIpRateLimited(
           error: 'Too many requests from your network. Please try again in a moment.',
         };
       }
+    } else {
+      ipEntry.attempts = 0;
+      ipEntry.inFlight = 0;
     }
   }
   return { allowed: true };
@@ -211,12 +232,19 @@ export function checkStudentPinRateLimit(
   // 1. Check IP-level rate limit
   let ipEntry = ipMap.get(clientIp);
   if (ipEntry) {
-    if (ipEntry.lockedUntil && ipEntry.lockedUntil > now) {
-      const remainingMinutes = Math.ceil((ipEntry.lockedUntil - now) / 60000);
-      return {
-        allowed: false,
-        error: `Too many authentication requests from your network. Please wait ${remainingMinutes} minute(s).`,
-      };
+    if (ipEntry.lockedUntil) {
+      if (ipEntry.lockedUntil > now) {
+        const remainingMinutes = Math.ceil((ipEntry.lockedUntil - now) / 60000);
+        return {
+          allowed: false,
+          error: `Too many authentication requests from your network. Please wait ${remainingMinutes} minute(s).`,
+        };
+      } else {
+        // Lockout expired: reset attempts and clear lockout
+        ipEntry.lockedUntil = undefined;
+        ipEntry.attempts = 0;
+        ipEntry.inFlight = 0;
+      }
     }
 
     if (now - ipEntry.lastAttempt < WINDOW_MS) {
@@ -244,12 +272,19 @@ export function checkStudentPinRateLimit(
   // 2. Check student/account-level failure lockout
   let accountEntry = accountMap.get(studentId);
   if (accountEntry) {
-    if (accountEntry.lockedUntil && accountEntry.lockedUntil > now) {
-      const remainingMinutes = Math.ceil((accountEntry.lockedUntil - now) / 60000);
-      return {
-        allowed: false,
-        error: `Account temporarily locked due to multiple failed PIN attempts. Please wait ${remainingMinutes} minute(s) or contact administration.`,
-      };
+    if (accountEntry.lockedUntil) {
+      if (accountEntry.lockedUntil > now) {
+        const remainingMinutes = Math.ceil((accountEntry.lockedUntil - now) / 60000);
+        return {
+          allowed: false,
+          error: `Account temporarily locked due to multiple failed PIN attempts. Please wait ${remainingMinutes} minute(s) or contact administration.`,
+        };
+      } else {
+        // Lockout expired: reset attempts and clear lockout
+        accountEntry.lockedUntil = undefined;
+        accountEntry.attempts = 0;
+        accountEntry.inFlight = 0;
+      }
     }
 
     if (now - accountEntry.lastAttempt < WINDOW_MS) {
@@ -333,6 +368,10 @@ export function recordPinFailure(
   // IP bucket
   enforceCapacity(ipMap, MAX_IP_BUCKETS, now);
   const ipEntry = ipMap.get(clientIp) || { attempts: 0, inFlight: 0, lastAttempt: now };
+  if (ipEntry.lockedUntil && ipEntry.lockedUntil <= now) {
+    ipEntry.lockedUntil = undefined;
+    ipEntry.attempts = 0;
+  }
   if (ipEntry.inFlight > 0) {
     ipEntry.inFlight -= 1;
   }
@@ -350,6 +389,10 @@ export function recordPinFailure(
   // Account bucket
   enforceCapacity(accountMap, MAX_STUDENT_BUCKETS, now);
   const accountEntry = accountMap.get(studentId) || { attempts: 0, inFlight: 0, lastAttempt: now };
+  if (accountEntry.lockedUntil && accountEntry.lockedUntil <= now) {
+    accountEntry.lockedUntil = undefined;
+    accountEntry.attempts = 0;
+  }
   if (accountEntry.inFlight > 0) {
     accountEntry.inFlight -= 1;
   }
@@ -420,12 +463,19 @@ export function checkAdminRateLimit(clientIp: string): { allowed: boolean; error
   const now = Date.now();
   const entry = adminBuckets.get(clientIp);
   if (entry) {
-    if (entry.lockedUntil && entry.lockedUntil > now) {
-      const remainingMinutes = Math.ceil((entry.lockedUntil - now) / 60000);
-      return {
-        allowed: false,
-        error: `Too many failed Director login attempts from your network. Please wait ${remainingMinutes} minute(s).`,
-      };
+    if (entry.lockedUntil) {
+      if (entry.lockedUntil > now) {
+        const remainingMinutes = Math.ceil((entry.lockedUntil - now) / 60000);
+        return {
+          allowed: false,
+          error: `Too many failed Director login attempts from your network. Please wait ${remainingMinutes} minute(s).`,
+        };
+      } else {
+        // Lockout expired: reset attempts and clear lockout
+        entry.lockedUntil = undefined;
+        entry.attempts = 0;
+        entry.inFlight = 0;
+      }
     }
     if (now - entry.lastAttempt > WINDOW_MS) {
       entry.attempts = 0;
@@ -441,6 +491,10 @@ export function recordAdminFailure(clientIp: string): void {
   const now = Date.now();
   enforceCapacity(adminBuckets, MAX_IP_BUCKETS, now);
   const entry = adminBuckets.get(clientIp) || { attempts: 0, inFlight: 0, lastAttempt: now };
+  if (entry.lockedUntil && entry.lockedUntil <= now) {
+    entry.lockedUntil = undefined;
+    entry.attempts = 0;
+  }
   if (now - entry.lastAttempt > WINDOW_MS) {
     entry.attempts = 1;
   } else {
@@ -497,10 +551,20 @@ function cleanupExpiredBuckets(now: number): void {
 function enforceCapacity(map: Map<string, RateLimitEntry>, maxCapacity: number, now: number): void {
   if (map.size >= maxCapacity) {
     cleanupExpiredBuckets(now);
-    while (map.size >= maxCapacity) {
-      const oldestKey = map.keys().next().value;
-      if (oldestKey === undefined) break;
-      map.delete(oldestKey);
+    if (map.size >= maxCapacity) {
+      // First pass: evict unlocked or expired entries before evicting actively locked-out accounts/IPs
+      for (const [key, entry] of map.entries()) {
+        if (!entry.lockedUntil || entry.lockedUntil <= now) {
+          map.delete(key);
+          if (map.size < maxCapacity) return;
+        }
+      }
+      // Second pass: if still over capacity, evict oldest
+      while (map.size >= maxCapacity) {
+        const oldestKey = map.keys().next().value;
+        if (oldestKey === undefined) break;
+        map.delete(oldestKey);
+      }
     }
   }
 }
@@ -514,6 +578,27 @@ export function resetRateLimitsForTesting(): void {
   teacherIpBuckets.clear();
   teacherBuckets.clear();
   adminBuckets.clear();
+}
+
+/**
+ * Testing helper to directly set bucket entries for testing expiration and windowing.
+ */
+export function setBucketEntryForTesting(
+  bucketType: 'student' | 'teacher' | 'ip' | 'teacherIp' | 'admin',
+  key: string,
+  entry: RateLimitEntry
+): void {
+  const targetMap =
+    bucketType === 'student'
+      ? studentBuckets
+      : bucketType === 'teacher'
+      ? teacherBuckets
+      : bucketType === 'teacherIp'
+      ? teacherIpBuckets
+      : bucketType === 'admin'
+      ? adminBuckets
+      : ipBuckets;
+  targetMap.set(key, entry);
 }
 
 /**

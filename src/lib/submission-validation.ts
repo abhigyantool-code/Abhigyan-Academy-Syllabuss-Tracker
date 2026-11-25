@@ -63,7 +63,10 @@ export async function analyzeMisuseFlags(params: {
         filter: `subject = "${subjectId}" && status = "completed" && is_voided = false`,
         fields: 'topic',
       })
-      .catch(() => [] as any[]);
+      .catch((err) => {
+        console.error(`[SubmissionValidation] Failed to fetch teaching records for subject ${subjectId}:`, err);
+        return [] as any[];
+      });
 
     const [currentTopic, allSubjectTopics, coveredEntries, teachingRecords] = await Promise.all([
       pb.collection('topics').getOne(topicId),

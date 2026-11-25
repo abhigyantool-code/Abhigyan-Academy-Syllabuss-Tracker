@@ -198,7 +198,10 @@ export async function getAdminInitialData() {
     pb.collection('teaching_records').getList(1, 50, {
       sort: '-session_date',
       expand: 'teacher,subject,topic,course',
-    }).catch(() => ({ items: [] as any[] })),
+    }).catch((err) => {
+      console.error('[AdminData] Failed to fetch recent teaching records:', err);
+      return { items: [] as any[] };
+    }),
   ]);
 
   const auditLogData = auditLogs.items.map((a) => ({

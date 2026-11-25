@@ -66,13 +66,18 @@ Both High-Severity P1 blockers identified in the Final Production Readiness Audi
 | File | Substance of Changes |
 |---|---|
 | `src/lib/dashboard-data.ts` | 1. Replaced invalid `sort: '-session_date,-created'` with valid `sort: '-session_date'` on `allTeachingRecordsPromise`.<br>2. Replaced silent `.catch(() => [] as any[])` with structured server-side error logging (`console.error('[Dashboard] ...')`) and safe fallback.<br>3. Wrapped `getDashboardData()` and `getActiveCourses()` in top-level try/catch blocks so internal database errors are never exposed to clients.<br>4. Added defense-in-depth filters ensuring synthetic BOT teaching records and test courses are excluded from genuine academic metrics, pacing calculations, and recent activity tables. |
-| `src/lib/rate-limit.ts` | 1. Implemented 3-layer rate-limiting strategy: Layer 1 (account), Layer 2 (shared IP), Layer 3 (admin).<br>2. Implemented `getMaxIpAttempts(role)`: defaults to `100` in production (overridable via `MAX_IP_LOGIN_ATTEMPTS`), while preserving `10` in non-production unit test baseline.<br>3. Separated student IP buckets (`ipBuckets`) and teacher IP buckets (`teacherIpBuckets`) to prevent cross-role lockout contagion.<br>4. Separated student account buckets (`studentBuckets`) and teacher account buckets (`teacherBuckets`).<br>5. Added dedicated teacher helper functions (`checkTeacherPinRateLimit`, `recordTeacherPinFailure`, `recordTeacherPinSuccess`, `releaseTeacherPinAttempt`).<br>6. Updated FIFO capacity enforcement and window cleanup to manage all 5 bucket maps. |
-| `src/app/actions/auth-actions.ts` | 1. Wired faculty login and PIN updates to dedicated teacher rate-limiting functions.<br>2. Replaced global `'unknown_student'` and `'unknown_teacher'` failure targets with distinct per-identifier keys (`unknown_student:${cleanRoll}` and `unknown_teacher:${teacherId}`) to eliminate cross-student typo accumulation.<br>3. Maintained uniform generic error responses (`"Invalid Roll Number or PIN."`) to prevent account enumeration. |
-| `src/lib/student-guard.ts` | Replaced `'unknown_student'` with `unknown_student:${studentId.trim().toUpperCase()}` in submission PIN verification guard. |
+| `src/lib/rate-limit.ts` | 1. Implemented 3-layer rate-limiting strategy: Layer 1 (account), Layer 2 (shared IP), Layer 3 (admin).<br>2. Implemented `getMaxIpAttempts(role)`: supports both `MAX_IP_LOGIN_ATTEMPTS` and `MAX_IP_ATTEMPTS`, plus role-specific overrides (`MAX_TEACHER_IP_ATTEMPTS`, `MAX_STUDENT_IP_ATTEMPTS`), defaulting to `100` in production and `10` in test baseline.<br>3. Fixed lockout expiration re-lock bug: when `lockedUntil <= now`, resets `lockedUntil = undefined` and `attempts = 0` to prevent perpetual lockout loops.<br>4. Separated student IP buckets (`ipBuckets`) and teacher IP buckets (`teacherIpBuckets`) to prevent cross-role lockout contagion.<br>5. Separated student account buckets (`studentBuckets`) and teacher account buckets (`teacherBuckets`).<br>6. Added dedicated teacher helper functions (`checkTeacherPinRateLimit`, `recordTeacherPinFailure`, `recordTeacherPinSuccess`, `releaseTeacherPinAttempt`).<br>7. Hardened `enforceCapacity` against cache-flooding attacks by prioritizing eviction of unlocked/expired entries over actively locked accounts.<br>8. Added testing helper `setBucketEntryForTesting` to test time window and lockout expiration without manual clearing. |
+| `src/app/actions/auth-actions.ts` | 1. Wired faculty login and PIN updates to dedicated teacher rate-limiting functions.<br>2. Replaced global `'unknown_student'` and `'unknown_teacher'` failure targets with distinct per-identifier keys (`unknown_student:${cleanRoll}` and `unknown_teacher:${teacherId}`) to eliminate cross-student typo accumulation.<br>3. Fixed account enumeration vulnerabilities: unified error responses (`"Incorrect PIN. Please try again."` for teacher login and `"Invalid student credentials or PIN."` for student PIN change) to prevent attackers from determining account existence. |
+| `src/lib/student-guard.ts` | 1. Replaced `'unknown_student'` with `unknown_student:${studentId.trim().toUpperCase()}` in submission PIN verification guard.<br>2. Fixed account enumeration by unifying student lookup failure message with PIN failure message. |
+| `src/lib/teacher-data.ts` | Replaced silent `.catch(() => ...)` with structured server-side logging (`console.error('[TeacherData] ...')`) for `teaching_records` queries. |
+| `src/lib/admin-data.ts` | Replaced silent `.catch(() => ...)` with structured server-side logging (`console.error('[AdminData] ...')`) for `teaching_records` queries. |
+| `src/lib/submission-validation.ts` | Replaced silent `.catch(() => ...)` with structured server-side logging (`console.error('[SubmissionValidation] ...')`) for `teaching_records` anti-misuse queries. |
+| `src/app/student/page.tsx` | Replaced silent `.catch(() => ...)` with structured server-side logging (`console.error('[StudentPage] ...')`) for student roster, enrollments, entries, and subject queries. |
 | `.env.example` | Documented `MAX_IP_LOGIN_ATTEMPTS="100"` configuration. |
 | `.env.local` | Set `MAX_IP_LOGIN_ATTEMPTS="100"` for local/server environments. |
 | `src/scripts/setup-and-verify-bot-accounts.ts` | Updated expected genuine academy coverage assertion from outdated bug value (`5` covered, `1955` pending, `0.3%`) to genuine verified post-fix value (`8` covered, `1952` pending, `0.4%`). |
-| `src/tests/unit/rate-limit-layered.test.ts` | Added comprehensive unit test suite validating all 10 required production rate-limiting scenarios. |
+| `src/tests/unit/rate-limit-layered.test.ts` | Added comprehensive unit test suite validating all 10 required production rate-limiting scenarios plus Scenario 11 (configuration overrides) and Scenario 12 (anti-cache-flooding eviction). Remediated Scenario 7 to test true sliding window and lockout expiration without resetting maps. |
+| `src/tests/unit/dashboard-data.test.ts` | Added dedicated unit test suite for executive dashboard metrics calculation, verifying NDA, CDS, academy-wide totals, recent teaching activity, and test curriculum exclusion. |
 
 ---
 
@@ -122,10 +127,11 @@ Every test is classified into one of the four mandatory categories:
 - **`NOT VERIFIED`**
 
 ### 6.1 Unit Test Suite Execution (`src/tests/unit/*.test.ts`)
-- **Total Tests:** 183
-- **Passed:** 183
+- **Total Tests:** 188
+- **Suites:** 57
+- **Passed:** 188
 - **Failed:** 0
-- **Duration:** 4.63s
+- **Duration:** 17.3s
 - **Classification:** **`LOCAL VERIFIED`**
 
 ### 6.2 AUDIT-02 Layered Rate-Limiting Scenarios (`src/tests/unit/rate-limit-layered.test.ts`)
@@ -138,10 +144,12 @@ Every test is classified into one of the four mandatory categories:
 | **Scenario 4** | Teacher and students share same IP (role isolation protects faculty). | PASS | **`ISOLATED TEST VERIFIED`** |
 | **Scenario 5** | Attacker repeatedly targets one account (attacker isolated, classmates safe). | PASS | **`ISOLATED TEST VERIFIED`** |
 | **Scenario 6** | High concurrency burst (25 requests) does not trigger race condition or false locks. | PASS | **`ISOLATED TEST VERIFIED`** |
-| **Scenario 7** | Rate-limit window expiration resets counters cleanly after 15 minutes. | PASS | **`ISOLATED TEST VERIFIED`** |
+| **Scenario 7** | Rate-limit window and lockout expiration resets counters without manual map clearing. | PASS | **`ISOLATED TEST VERIFIED`** |
 | **Scenario 8** | Application restarts re-initialize cleanly and enforce security immediately. | PASS | **`ISOLATED TEST VERIFIED`** |
 | **Scenario 9** | Admin protection remains strictly guarded (5-attempt threshold, isolated). | PASS | **`ISOLATED TEST VERIFIED`** |
 | **Scenario 10** | Classroom of 20 students with normal typos does not cause collective lockout. | PASS | **`ISOLATED TEST VERIFIED`** |
+| **Scenario 11** | Configuration flexibility: supports `MAX_IP_ATTEMPTS`, `MAX_IP_LOGIN_ATTEMPTS`, and role overrides. | PASS | **`ISOLATED TEST VERIFIED`** |
+| **Scenario 12** | Anti-cache-flooding protects locked accounts from eviction under memory pressure. | PASS | **`ISOLATED TEST VERIFIED`** |
 
 ### 6.3 Dedicated BOT Accounts End-to-End Workflow & Invariant Audit (`setup-and-verify-bot-accounts.ts`)
 - **Total Checks:** 149
@@ -244,7 +252,7 @@ All acceptance criteria specified in the P1 Remediation authorization have been 
 - ✅ Shared classroom Wi-Fi no longer causes collective lockouts (`MAX_IP_LOGIN_ATTEMPTS=100` + role isolation).
 - ✅ Individual account brute-force protection remains effective (5 attempts max).
 - ✅ Administrator authentication remains strictly protected (5 attempts max).
-- ✅ All regression tests pass (183/183 unit tests, 50/50 portal tests, 7/7 smoke tests, 149/149 bot tests).
+- ✅ All regression tests pass (188/188 unit tests across 57 suites, 50/50 portal tests, 7/7 smoke tests, 149/149 bot tests).
 - ✅ Production deployment is healthy and verified live on `https://syllabus360.abhigyanintelligence.cloud`.
 - ✅ Zero new P0 or P1 issues introduced.
 

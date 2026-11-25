@@ -43,9 +43,18 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
   // If Admin is accessing /student without a specific studentId, render Authorized Student Management Directory
   if (isAdmin && !resolvedParams.studentId) {
     const [allStudents, allEnrollments, allEntries] = await Promise.all([
-      pb.collection('students').getFullList({ filter: 'active = true', sort: 'roll_no' }).catch(() => []),
-      pb.collection('enrollments').getFullList({ expand: 'course' }).catch(() => []),
-      pb.collection('entries').getFullList().catch(() => []),
+      pb.collection('students').getFullList({ filter: 'active = true', sort: 'roll_no' }).catch((err) => {
+        console.error('[StudentPage] Failed to fetch active students:', err);
+        return [];
+      }),
+      pb.collection('enrollments').getFullList({ expand: 'course' }).catch((err) => {
+        console.error('[StudentPage] Failed to fetch enrollments:', err);
+        return [];
+      }),
+      pb.collection('entries').getFullList().catch((err) => {
+        console.error('[StudentPage] Failed to fetch entries:', err);
+        return [];
+      }),
     ]);
 
     const studentEnrollments = new Map<string, string[]>();
@@ -350,7 +359,10 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
         sort: 'sort_order',
         expand: 'course',
       })
-      .catch(() => [] as any[]);
+      .catch((err) => {
+        console.error('[StudentPage] Failed to fetch enrolled subjects:', err);
+        return [] as any[];
+      });
 
     if (subjectsList.length > 0) {
       const subFilter = subjectsList.map((s) => `subject = "${s.id}"`).join(' || ');
@@ -360,7 +372,10 @@ export default async function StudentDashboardPage({ searchParams }: StudentPage
           filter: subFilter,
           sort: 'seq_no',
         })
-        .catch(() => [] as any[]);
+        .catch((err) => {
+          console.error('[StudentPage] Failed to fetch subject topics:', err);
+          return [] as any[];
+        });
 
       const studentLoggedTopicIds = new Set(entries.map((e) => e.topic));
       const topicsBySub = new Map<string, any[]>();

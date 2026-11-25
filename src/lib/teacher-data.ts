@@ -135,7 +135,10 @@ export async function getTeacherDashboardData(
     .getFullList({
       filter: `(${subjectFilter}) && is_voided = false`,
     })
-    .catch(() => [] as any[]);
+    .catch((err) => {
+      console.error('[TeacherData] Failed to fetch teaching records for teacher subjects:', err);
+      return [] as any[];
+    });
 
   const [allTopics, allEntries, allTeachingRecords] = await Promise.all([
     pb.collection('topics').getFullList({
@@ -316,7 +319,10 @@ export async function getTeacherDashboardData(
       filter: `teacher = "${teacherId}"`,
       sort: '-session_date',
       expand: 'subject,topic,course',
-    }).catch(() => ({ items: [] as any[] })),
+    }).catch((err) => {
+      console.error(`[TeacherData] Failed to fetch recent teaching records for teacher ${teacherId}:`, err);
+      return { items: [] as any[] };
+    }),
   ]);
 
   const recentStudentLogs: TeacherRecentEntry[] = logsRes.items.map((r) => {

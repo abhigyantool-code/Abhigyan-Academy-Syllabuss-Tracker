@@ -73,7 +73,7 @@ export async function teacherLoginAction(
       teacher = await pb.collection('teachers').getOne(teacherId);
     } catch {
       recordTeacherPinFailure(`unknown_teacher:${teacherId}`, clientIp);
-      return { success: false, error: 'Teacher record not found.' };
+      return { success: false, error: 'Incorrect PIN. Please try again.' };
     }
 
     resolvedTeacherId = teacher.id;
@@ -414,7 +414,7 @@ export async function changeStudentPinAction(
         student = await pb.collection('students').getFirstListItem(`roll_no="${safeId}"`);
       } catch {
         recordPinFailure(`unknown_student:${studentIdentifier.trim().toUpperCase()}`, clientIp);
-        return { success: false, error: 'Student record not found.' };
+        return { success: false, error: 'Invalid student credentials or PIN.' };
       }
     }
 

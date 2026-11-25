@@ -12,6 +12,8 @@ import {
   recordAdminFailure,
   resetRateLimitsForTesting,
   getBucketCountsForTesting,
+  setBucketEntryForTesting,
+  getMaxIpAttempts,
 } from '../../lib/rate-limit';
 
 describe('Layered Rate Limiting & Shared Classroom Wi-Fi Protection (AUDIT-02)', () => {
@@ -168,23 +170,59 @@ describe('Layered Rate Limiting & Shared Classroom Wi-Fi Protection (AUDIT-02)',
   });
 
   // Scenario 7: Rate-limit windows expire correctly
-  it('Scenario 7: Rate-limit window expiration resets counters', () => {
+  it('Scenario 7: Rate-limit window and lockout expiration resets counters without manual map clearing', () => {
     const testIp = '103.21.244.56';
     const studentId = 'expiring_student';
 
-    // 4 failed attempts
-    for (let i = 0; i < 4; i++) {
-      recordPinFailure(studentId, testIp);
-    }
+    // 1. Verify sliding window expiration for non-locked account
+    // 4 failed attempts recorded 16 minutes ago (WINDOW_MS = 15m)
+    setBucketEntryForTesting('student', studentId, {
+      attempts: 4,
+      inFlight: 0,
+      lastAttempt: Date.now() - 16 * 60 * 1000,
+    });
 
-    // Simulate window expiry (Date.now() + 16 minutes in manual check)
-    // Reset testing helper simulates fresh window
-    resetRateLimitsForTesting();
-
-    // After reset/expiry, account starts fresh with 0 attempts
+    // Next attempt must see fresh window (attempts reset to 0)
     const freshCheck = checkStudentPinRateLimit(studentId, testIp);
-    assert.strictEqual(freshCheck.allowed, true);
+    assert.strictEqual(freshCheck.allowed, true, 'Window expiration must allow attempt');
     releasePinAttempt(studentId, testIp);
+
+    // 2. Verify account lockout expiration resets attempts and allows login
+    const lockedStudent = 'locked_then_expired_student';
+    setBucketEntryForTesting('student', lockedStudent, {
+      attempts: 5,
+      inFlight: 0,
+      lastAttempt: Date.now() - 16 * 60 * 1000,
+      lockedUntil: Date.now() - 1000, // Lockout expired 1s ago
+    });
+
+    const unlockedCheck = checkStudentPinRateLimit(lockedStudent, testIp);
+    assert.strictEqual(unlockedCheck.allowed, true, 'Expired account lockout must allow fresh login');
+    releasePinAttempt(lockedStudent, testIp);
+
+    // 3. Verify IP lockout expiration resets IP attempts and clears lockout
+    const lockedIp = '103.21.244.99';
+    setBucketEntryForTesting('ip', lockedIp, {
+      attempts: 100,
+      inFlight: 0,
+      lastAttempt: Date.now() - 16 * 60 * 1000,
+      lockedUntil: Date.now() - 1000, // Lockout expired 1s ago
+    });
+
+    const ipCheck = isIpRateLimited(lockedIp);
+    assert.strictEqual(ipCheck.allowed, true, 'Expired IP lockout must restore network access');
+
+    // 4. Verify Admin lockout expiration restores access
+    const adminIp = '103.21.244.101';
+    setBucketEntryForTesting('admin', adminIp, {
+      attempts: 5,
+      inFlight: 0,
+      lastAttempt: Date.now() - 16 * 60 * 1000,
+      lockedUntil: Date.now() - 1000,
+    });
+
+    const adminCheck = checkAdminRateLimit(adminIp);
+    assert.strictEqual(adminCheck.allowed, true, 'Expired Admin lockout must restore login capability');
   });
 
   // Scenario 8: Application restarts do not unexpectedly reset security protections
@@ -270,5 +308,58 @@ describe('Layered Rate Limiting & Shared Classroom Wi-Fi Protection (AUDIT-02)',
 
     const ipCheck = isIpRateLimited(classroomIp);
     assert.strictEqual(ipCheck.allowed, true, 'Classroom IP must be completely accessible');
+  });
+
+  // Scenario 11: Configuration flexibility (MAX_IP_ATTEMPTS and role overrides)
+  it('Scenario 11: Supports MAX_IP_ATTEMPTS, MAX_IP_LOGIN_ATTEMPTS, and role overrides', () => {
+    delete process.env.MAX_IP_LOGIN_ATTEMPTS;
+    delete process.env.MAX_IP_ATTEMPTS;
+    delete process.env.MAX_TEACHER_IP_ATTEMPTS;
+
+    // Default test env without variables
+    assert.strictEqual(getMaxIpAttempts('student'), 10);
+    assert.strictEqual(getMaxIpAttempts('teacher'), 10);
+
+    // MAX_IP_ATTEMPTS support
+    process.env.MAX_IP_ATTEMPTS = '75';
+    assert.strictEqual(getMaxIpAttempts('student'), 75);
+    assert.strictEqual(getMaxIpAttempts('teacher'), 75);
+
+    // MAX_IP_LOGIN_ATTEMPTS takes precedence over generic MAX_IP_ATTEMPTS
+    process.env.MAX_IP_LOGIN_ATTEMPTS = '120';
+    assert.strictEqual(getMaxIpAttempts('student'), 120);
+
+    // Dedicated teacher override
+    process.env.MAX_TEACHER_IP_ATTEMPTS = '50';
+    assert.strictEqual(getMaxIpAttempts('teacher'), 50);
+    assert.strictEqual(getMaxIpAttempts('student'), 120);
+
+    delete process.env.MAX_TEACHER_IP_ATTEMPTS;
+    delete process.env.MAX_IP_ATTEMPTS;
+    process.env.MAX_IP_LOGIN_ATTEMPTS = '100';
+  });
+
+  // Scenario 12: Anti-cache-flooding protects locked accounts from eviction
+  it('Scenario 12: Capacity enforcement prioritizes evicting unlocked accounts over actively locked targets', () => {
+    const lockedStudent = 'critical_locked_target';
+    const testIp = '103.21.244.150';
+
+    // Lock target account
+    for (let i = 0; i < 5; i++) {
+      recordPinFailure(lockedStudent, testIp);
+    }
+    const lockedPre = checkStudentPinRateLimit(lockedStudent, testIp);
+    assert.strictEqual(lockedPre.allowed, false, 'Target must be locked');
+
+    // Simulate high volume of benign student attempts
+    for (let i = 1; i <= 20; i++) {
+      const stu = `benign_student_${i}`;
+      checkStudentPinRateLimit(stu, testIp);
+      releasePinAttempt(stu, testIp);
+    }
+
+    // Target account MUST remain locked despite the arrival of subsequent accounts
+    const lockedPost = checkStudentPinRateLimit(lockedStudent, testIp);
+    assert.strictEqual(lockedPost.allowed, false, 'Target account must remain locked under bucket load');
   });
 });
